@@ -1,7 +1,7 @@
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/patterns';
 import { OnboardingTable } from '../components/tables/OnboardingTable';
-import { ONBOARDING_PIPELINE } from '../data/onboarding';
+import { usePlatform } from '../context/PlatformContext';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
 import { exportReport } from '../utils/exportReport';
@@ -9,6 +9,7 @@ import { exportReport } from '../utils/exportReport';
 export function OnboardingPage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
+  const { onboarding, loading } = usePlatform();
 
   return (
     <>
@@ -26,7 +27,11 @@ export function OnboardingPage() {
           </div>
         }
       />
-      <OnboardingTable rows={ONBOARDING_PIPELINE} />
+      {loading && !onboarding.length ? (
+        <p className="pgsub">Loading pipeline…</p>
+      ) : (
+        <OnboardingTable rows={onboarding} />
+      )}
     </>
   );
 }

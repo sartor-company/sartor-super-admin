@@ -9,27 +9,37 @@ import { ProductPill } from '../components/ui/ProductPill';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
-import { CLIENTS } from '../data/clients';
+import { usePlatform } from '../context/PlatformContext';
 import { authColor, crmPillLabel, crmPillVariant, exportReport, scPillVariant } from './shared';
-
-const HEALTH_ROWS = [
-  { dot: 'var(--green)', label: 'API uptime (30d)', value: '99.7%' },
-  { dot: 'var(--green)', label: 'p95 response time', value: '1.8s' },
-  { dot: 'var(--green)', label: 'DORA model coverage', value: '91.4%' },
-  { dot: 'var(--amber)', label: 'Pending DORA training', value: '7 batches', color: 'var(--at)' },
-  { dot: 'var(--red)', label: 'P1/P2 investigations', value: '4 open', color: 'var(--rt)' },
-  { dot: 'var(--green)', label: 'SMS delivery rate', value: '97.3%' },
-];
-
-const OVERVIEW_CLIENTS = CLIENTS.filter((c) =>
-  ['SHC', 'DPL', 'FNC', 'NKF'].includes(c.code),
-);
 
 export function OverviewPage() {
   const navigate = useNavigate();
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
+  const { overview, clients, loading } = usePlatform();
+  const cards = (overview?.cards || {}) as Record<string, number | string>;
+  const health = (overview?.health || {}) as Record<string, string | number>;
+  const overviewClients = (overview?.clients as typeof clients) || clients.slice(0, 6);
+
+  const healthRows = [
+    { dot: 'var(--green)', label: 'API uptime (30d)', value: health.apiUptime || '—' },
+    { dot: 'var(--green)', label: 'p95 response time', value: health.p95Response || '—' },
+    { dot: 'var(--green)', label: 'DORA model coverage', value: health.doraCoverage ? `${health.doraCoverage}%` : '—' },
+    {
+      dot: 'var(--amber)',
+      label: 'Pending DORA training',
+      value: `${health.pendingDoraTraining ?? 0} batches`,
+      color: 'var(--at)',
+    },
+    {
+      dot: 'var(--red)',
+      label: 'P1/P2 investigations',
+      value: `${health.openInvestigationsP1P2 ?? 0} open`,
+      color: 'var(--rt)',
+    },
+    { dot: 'var(--green)', label: 'SMS delivery rate', value: health.smsDeliveryRate || '—' },
+  ];
 
   const openClient = (code: string) => navigate(`/clients/${code}`);
 
@@ -54,20 +64,31 @@ export function OverviewPage() {
       />
 
       <div className="kgrid5">
-        <KCard label="Active Clients" value="14" trend="↑ 2 this month" trendType="up" accent />
-        <KCard label="Total Scans (30d)" value="287K" trend="↑ 34%" trendType="up" />
-        <KCard label="Platform Auth Rate" value="96.8%" trend="↑ 0.9%" trendType="up" />
+        <KCard
+          label="Active Clients"
+          value={String(cards.activeClients ?? '—')}
+          trend={loading ? '…' : 'Live'}
+          trendType="up"
+          accent
+        />
+        <KCard label="Total Scans (30d)" value={String(cards.totalScans30d ?? '—')} trend="30d" trendType="up" />
+        <KCard label="Platform Auth Rate" value={String(cards.platformAuthRate ?? '—')} trend="Live" trendType="up" />
         <div style={{ cursor: 'pointer' }} onClick={() => navigate('/investigations')} role="presentation">
-          <KCard label="Open Investigations" value="23" trend="↑ 5 this week" trendType="dn" />
+          <KCard label="Open Investigations" value={String(cards.openInvestigations ?? '—')} trend="Open" trendType="dn" />
         </div>
-        <KCard label="MRR" value="₦8.75M" trend="↑ 12%" trendType="up" />
+        <KCard
+          label="MRR"
+          value={cards.mrr ? `₦${Number(cards.mrr).toLocaleString()}` : '—'}
+          trend="Paid invoices"
+          trendType="up"
+        />
       </div>
 
       <div className="r3" style={{ marginBottom: 14 }}>
         <ChartPanel title="Platform scan volume — last 30 days" chart="platform-scan" marginBottom={0} />
         <Card style={{ marginBottom: 0 }}>
           <CardHeader title="System health" />
-          {HEALTH_ROWS.map((row) => (
+          {healthRows.map((row) => (
             <StatRow
               key={row.label}
               label={
@@ -102,7 +123,7 @@ export function OverviewPage() {
               </tr>
             </thead>
             <tbody>
-              {OVERVIEW_CLIENTS.map((c) => (
+              {overviewClients.map((c) => (
                 <tr key={c.code} className="cl" onClick={() => openClient(c.code)}>
                   <td>
                     <ClientAvatar initials={c.ini} color={c.av} />

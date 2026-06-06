@@ -1,5 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { ProtectedRoute } from '../components/ProtectedRoute';
 import { AppLayout } from '../components/layout/AppLayout';
+import { PlatformProvider } from '../context/PlatformContext';
+import { ModalsRoot } from '../modals/ModalsRoot';
+import { LoginPage } from '../pages/LoginPage';
 import {
   AimlDashboardPage,
   AimlQueuePage,
@@ -19,7 +23,15 @@ import {
 export function AppRoutes() {
   return (
     <Routes>
-      <Route element={<AppLayout />}>
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<ProtectedRoute />}>
+        <Route
+          element={
+            <PlatformProvider>
+              <AppLayout />
+            </PlatformProvider>
+          }
+        >
         <Route index element={<OverviewPage />} />
         <Route path="clients" element={<ClientsPage />} />
         <Route path="clients/:code" element={<ClientDetailPage />} />
@@ -34,6 +46,8 @@ export function AppRoutes() {
         <Route path="aiml/queue" element={<AimlQueuePage />} />
         <Route path="support" element={<SupportPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
+        <ModalsRoot />
+        </Route>
       </Route>
     </Routes>
   );

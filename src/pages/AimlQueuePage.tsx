@@ -3,7 +3,9 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { TabBar } from '../components/ui/TabBar';
 import { InfoBanner, MonoCell, PageHeader, ProgressCell } from '../components/patterns';
-import { QUEUE_AWAITING, QUEUE_REVIEW, QUEUE_TRAINING } from '../data/aimlQueue';
+import { usePlatform } from '../context/PlatformContext';
+import { QUEUE_REVIEW, QUEUE_TRAINING } from '../data/aimlQueue';
+import type { QueueAwaitingRow } from '../data/aimlQueue';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
@@ -15,10 +17,12 @@ export function AimlQueuePage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
+  const { doraQueue } = usePlatform();
   const { active, setActive, isActive } = useTabs<QueueTab>('wait');
+  const awaiting = doraQueue as unknown as QueueAwaitingRow[];
 
   const tabs = [
-    { id: 'wait' as const, label: 'Awaiting Images (7)' },
+    { id: 'wait' as const, label: `Awaiting Images (${awaiting.length})` },
     { id: 'train' as const, label: 'In Training (3)' },
     { id: 'review' as const, label: 'Review Required (2)' },
   ];
@@ -46,7 +50,7 @@ export function AimlQueuePage() {
                 </tr>
               </thead>
               <tbody>
-                {QUEUE_AWAITING.map((row) => (
+                {awaiting.map((row) => (
                   <tr key={row.batch}>
                     <MonoCell>{row.batch}</MonoCell>
                     <td>{row.client}</td>

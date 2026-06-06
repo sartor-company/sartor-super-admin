@@ -1,8 +1,8 @@
 import { BrowserRouter } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { ModalProvider } from './context/ModalContext';
+import { PlatformProvider } from './context/PlatformContext';
 import { ToastProvider } from './context/ToastContext';
-import { ModalsRoot } from './modals/ModalsRoot';
 import { AppRoutes } from './routes/AppRoutes';
 
 export default function App() {
@@ -12,7 +12,6 @@ export default function App() {
         <ModalProvider>
           <AppProvider>
             <AppRoutes />
-            <ModalsRoot />
           </AppProvider>
         </ModalProvider>
       </ToastProvider>

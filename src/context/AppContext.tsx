@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -11,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { ROLES } from '../constants/roles';
 import type { Client } from '../data/clients';
 import { CLIENTS } from '../data/clients';
+import { useAuthStore } from '../store/authStore';
 import type { InvestigationDetail, RoleId } from '../types';
 
 interface AppContextValue {
@@ -41,7 +43,8 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const [role, setRoleState] = useState<RoleId>('super');
+  const authRole = useAuthStore((s) => s.user?.platformRole);
+  const [role, setRoleState] = useState<RoleId>(authRole || 'super');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedClientCode, setSelectedClientCode] = useState('SHC');
   const [followUp, setFollowUp] = useState<{
@@ -55,6 +58,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [staffEditName, setStaffEditName] = useState<string | null>(null);
   const [teamMemberEditName, setTeamMemberEditName] = useState<string | null>(null);
   const noteHandlerRef = useRef<((text: string) => void) | null>(null);
+
+  useEffect(() => {
+    if (authRole) setRoleState(authRole);
+  }, [authRole]);
 
   const selectedClient = useMemo(
     () => CLIENTS.find((c) => c.code === selectedClientCode) ?? null,

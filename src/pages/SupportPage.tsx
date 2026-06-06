@@ -5,7 +5,8 @@ import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { KCard, KCardGrid } from '../components/ui/KCard';
 import { MonoCell, PageHeader } from '../components/patterns';
-import { SUPPORT_TICKETS } from '../data/supportTickets';
+import { usePlatform } from '../context/PlatformContext';
+import type { SupportTicket } from '../data/supportTickets';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
@@ -16,12 +17,45 @@ export function SupportPage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
+  const { tickets } = usePlatform();
   const [query, setQuery] = useState('');
+
+  const mapped = useMemo(
+    (): SupportTicket[] =>
+      tickets.map((t) => {
+        const row = t as {
+          ticketId?: string;
+          _id?: string;
+          clientName?: string;
+          subject?: string;
+          description?: string;
+          priority?: string;
+          assignedName?: string;
+          status?: string;
+          assignedTo?: string;
+        };
+        return {
+          id: String(row.ticketId || row._id),
+          client: String(row.clientName || '—'),
+          type: String(row.subject || 'Support'),
+          typeVariant: 'bb',
+          desc: String(row.description || row.subject || ''),
+          priority: row.priority === 'P1' ? 'Critical' : 'Normal',
+          priorityVariant: row.priority === 'P1' ? 'br' : 'ba',
+          assigned: String(row.assignedName || 'Unassigned'),
+          age: '—',
+          status: String(row.status || 'Open'),
+          statusVariant: 'ba',
+          action: row.assignedTo ? 'resolve' : 'assign',
+        };
+      }),
+    [tickets],
+  );
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
-    return SUPPORT_TICKETS.filter((t) => !q || `${t.id} ${t.client} ${t.desc}`.toLowerCase().includes(q));
-  }, [query]);
+    return mapped.filter((t) => !q || `${t.id} ${t.client} ${t.desc}`.toLowerCase().includes(q));
+  }, [query, mapped]);
 
   return (
     <>

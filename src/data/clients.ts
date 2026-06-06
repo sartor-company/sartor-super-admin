@@ -1,6 +1,7 @@
 export type BadgeVariant = 'bg' | 'ba' | 'br' | 'bb' | 'bx' | 'bp' | 'bn';
 
 export interface Client {
+  _id?: string;
   name: string;
   code: string;
   rc: string;

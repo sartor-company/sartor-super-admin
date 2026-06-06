@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Badge } from '../components/ui/Badge';
@@ -14,7 +14,8 @@ import { NoteList, SectionTitle, ToggleRow, type NoteItemData } from '../compone
 import { useOpenTeamMember } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
-import { CLIENTS } from '../data/clients';
+import { platformApi } from '../api/platform';
+import type { Client } from '../data/clients';
 import { useTabs } from '../hooks/useTabs';
 import { crmPillLabel, crmPillVariant, exportReport, scPillVariant } from './shared';
 
@@ -54,6 +55,9 @@ export function ClientDetailPage() {
   const openTeamMember = useOpenTeamMember();
   const { showToast } = useToast();
   const { active, setActive, isActive } = useTabs<ClientTab>('overview');
+  const [client, setClient] = useState<Client | null>(null);
+  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState(INITIAL_NOTES);
   const [creditQty, setCreditQty] = useState('');
   const [creditAmount, setCreditAmount] = useState('');
@@ -61,25 +65,51 @@ export function ClientDetailPage() {
   const [creditInv, setCreditInv] = useState('');
 
   useEffect(() => {
-    registerNoteHandler((text) => {
-      const now = new Date().toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
-      setNotes((prev) => [
-        { author: 'Nwachukwu Confidence', date: now, text, warn: false },
-        ...prev,
-      ]);
+    if (!code) return;
+    setLoading(true);
+    platformApi
+      .client(code)
+      .then((data) => {
+        const d = data as Client & {
+          notes?: NoteItemData[];
+          skus?: typeof SKUS;
+          transactions?: typeof TRANSACTIONS;
+          users?: typeof TEAM;
+        };
+        setClient(d);
+        setDetail(data as Record<string, unknown>);
+        if (d.notes?.length) setNotes(d.notes);
+      })
+      .catch(() => setClient(null))
+      .finally(() => setLoading(false));
+  }, [code]);
+
+  useEffect(() => {
+    registerNoteHandler(async (text) => {
+      const id = client?._id || (detail?._id as string | undefined);
+      if (!id) return;
+      try {
+        const updated = await platformApi.addNote(id, text);
+        setNotes(updated as NoteItemData[]);
+        showToast('Note saved.', 'success');
+      } catch {
+        showToast('Failed to save note.', 'error');
+      }
     });
     return () => registerNoteHandler(null);
-  }, [registerNoteHandler]);
-
-  const client = useMemo(() => CLIENTS.find((x) => x.code === code), [code]);
+  }, [registerNoteHandler, client?._id, detail?._id, showToast]);
 
   useEffect(() => {
     if (code) setSelectedClientCode(code);
   }, [code, setSelectedClientCode]);
+
+  if (loading) {
+    return (
+      <Card>
+        <p>Loading client…</p>
+      </Card>
+    );
+  }
 
   if (!client) {
     return (
@@ -93,7 +123,10 @@ export function ClientDetailPage() {
   const pilot = client.scband === 'Pilot';
   const crmVar = crmPillVariant(client.crm);
   const crmLbl = crmPillLabel(client.crm);
-  const skuCount = pilot ? '1' : client.code === 'SHC' ? '24' : client.code === 'DPL' ? '18' : client.code === 'NKF' ? '8' : '11';
+  const skuCount = String(client.skus ?? (pilot ? '1' : '—'));
+  const apiSkus = (detail?.skus as typeof SKUS) || SKUS;
+  const apiTeam = (detail?.users as Array<{ fullName?: string; email?: string; role?: string }>) || [];
+  const apiTransactions = (detail?.transactions as typeof TRANSACTIONS) || TRANSACTIONS;
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview' },
@@ -533,7 +566,7 @@ export function ClientDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {TRANSACTIONS.map((t) => (
+                {apiTransactions.map((t) => (
                   <tr key={t.inv}>
                     <td>{t.date}</td>
                     <td>
@@ -638,7 +671,7 @@ export function ClientDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {SKUS.map((s) => (
+              {apiSkus.map((s) => (
                 <tr key={s.sku}>
                   <td>
                     <strong>{s.product}</strong>

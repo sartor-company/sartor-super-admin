@@ -7,20 +7,21 @@ import { ClientAvatar } from '../components/ui/ClientAvatar';
 import { ProductPill } from '../components/ui/ProductPill';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
-import { CLIENTS } from '../data/clients';
+import { usePlatform } from '../context/PlatformContext';
 import { authColor, crmPillLabel, crmPillVariant, scPillVariant } from './shared';
 
 export function ClientsPage() {
   const navigate = useNavigate();
   const { openModal } = useModal();
   const followUp = useFollowUp();
+  const { clients, loading, refreshClients } = usePlatform();
   const [text, setText] = useState('');
   const [prod, setProd] = useState('');
   const [stat, setStat] = useState('');
 
   const filtered = useMemo(() => {
     const q = text.toLowerCase();
-    return CLIENTS.filter((c) => {
+    return clients.filter((c) => {
       const okText =
         !q ||
         c.name.toLowerCase().includes(q) ||
@@ -30,9 +31,13 @@ export function ClientsPage() {
       const okStat = !stat || c.status.toLowerCase() === stat.toLowerCase();
       return okText && okProd && okStat;
     });
-  }, [text, prod, stat]);
+  }, [text, prod, stat, clients]);
 
   const openClient = (code: string) => navigate(`/clients/${code}`);
+
+  if (loading && !clients.length) {
+    return <div className="pghead"><div className="pgsub">Loading clients…</div></div>;
+  }
 
   return (
     <>

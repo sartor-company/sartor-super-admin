@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { FilterBar, FilterSelect, PageHeader, SearchInput } from '../components/patterns';
 import { InvestigationsTable } from '../components/tables/InvestigationsTable';
-import { INVESTIGATIONS } from '../data/investigations';
+import { usePlatform } from '../context/PlatformContext';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
 import { exportReport } from '../utils/exportReport';
@@ -10,13 +10,14 @@ import { exportReport } from '../utils/exportReport';
 export function InvestigationsPage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
+  const { investigations } = usePlatform();
   const [query, setQuery] = useState('');
   const [severity, setSeverity] = useState('');
   const [status, setStatus] = useState('');
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
-    return INVESTIGATIONS.filter((row) => {
+    return investigations.filter((row) => {
       const okQ =
         !q ||
         row.id.toLowerCase().includes(q) ||
@@ -26,7 +27,7 @@ export function InvestigationsPage() {
       const okSt = !status || row.status === status;
       return okQ && okSev && okSt;
     });
-  }, [query, severity, status]);
+  }, [query, severity, status, investigations]);
 
   return (
     <>

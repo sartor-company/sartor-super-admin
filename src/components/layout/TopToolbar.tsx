@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { matchPageMeta } from '../../constants/routes';
 import { useApp } from '../../context/AppContext';
-import { CLIENTS } from '../../data/clients';
+import { usePlatform } from '../../context/PlatformContext';
+import { useAuthStore } from '../../store/authStore';
 import { ClientAvatar } from '../ui/ClientAvatar';
 import { NotifPanel } from './NotifPanel';
 
@@ -11,13 +12,16 @@ export function TopToolbar() {
   const meta = matchPageMeta(pathname);
   const navigate = useNavigate();
   const { openSidebar, notifOpen, setNotifOpen, notifDot, clearNotifDot } = useApp();
+  const { clients } = usePlatform();
+  const logout = useAuthStore((s) => s.logout);
+  const user = useAuthStore((s) => s.user);
   const [q, setQ] = useState('');
   const [showResults, setShowResults] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const results =
     q.trim().length > 0
-      ? CLIENTS.filter(
+      ? clients.filter(
           (c) =>
             c.name.toLowerCase().includes(q.toLowerCase()) ||
             c.code.toLowerCase().includes(q.toLowerCase()) ||
@@ -139,6 +143,19 @@ export function TopToolbar() {
             </svg>
             {notifDot && <div className="ndot" id="ndot" />}
           </button>
+          {user && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: 12, padding: '6px 10px' }}
+              onClick={() => {
+                logout();
+                navigate('/login');
+              }}
+            >
+              Log out
+            </button>
+          )}
         </div>
       </div>
       <NotifPanel />

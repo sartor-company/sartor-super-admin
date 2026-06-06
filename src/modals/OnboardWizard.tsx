@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { platformApi } from '../api/platform';
 import { Button } from '../components/ui/Button';
 import { FormGroup } from '../components/ui/FormGroup';
+import { usePlatform } from '../context/PlatformContext';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
 import { formatNaira } from '../utils/format';
@@ -10,7 +12,16 @@ const STEPS = ['Company Information', 'Products & Engagement', 'Admin Account Se
 export function OnboardWizard() {
   const { closeModal } = useModal();
   const { showToast } = useToast();
+  const { refresh } = usePlatform();
   const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [companyName, setCompanyName] = useState('');
+  const [rcNumber, setRcNumber] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [crmOn, setCrmOn] = useState(false);
   const [eng, setEng] = useState<'pilot' | 'full'>('pilot');
   const [crmRate, setCrmRate] = useState(0);
@@ -18,6 +29,7 @@ export function OnboardWizard() {
   const [crmSeats, setCrmSeats] = useState('');
   const [crmCycle, setCrmCycle] = useState('monthly');
   const [skuN, setSkuN] = useState('');
+  const [scBand, setScBand] = useState<'Pilot' | 'Starter' | 'Growth'>('Pilot');
 
   const obCrmBilling = () => {
     const rate = crmRate;
@@ -74,10 +86,37 @@ export function OnboardWizard() {
     );
   };
 
-  const finish = () => {
-    closeModal('onboard');
-    showToast('Client account activated. Welcome email sent.', 'success');
-    setStep(0);
+  const finish = async () => {
+    if (!companyName || !contactEmail) {
+      showToast('Company name and contact email are required.', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      await platformApi.onboard({
+        fullName: companyName,
+        email: contactEmail,
+        phone,
+        address,
+        industry,
+        rcNumber,
+        password: adminPassword || undefined,
+        scBand,
+        engagement: eng,
+        crmEnabled: crmOn,
+        crmTier: crmName || undefined,
+        crmSeats: crmSeats ? parseInt(crmSeats, 10) : undefined,
+        skuCount: skuN ? parseInt(skuN, 10) : undefined,
+      });
+      await refresh();
+      closeModal('onboard');
+      showToast('Client onboarded. Welcome email sent.', 'success');
+      setStep(0);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Onboarding failed', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -102,15 +141,25 @@ export function OnboardWizard() {
       {step === 0 && (
         <>
           <FormGroup label="Company Name *">
-            <input className="inp" placeholder="Registered company name" />
+            <input
+              className="inp"
+              placeholder="Registered company name"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+            />
           </FormGroup>
           <div className="fr2">
             <FormGroup label="RC Number *">
-              <input className="inp" placeholder="e.g. RC 1234567" />
+              <input
+                className="inp"
+                placeholder="e.g. RC 1234567"
+                value={rcNumber}
+                onChange={(e) => setRcNumber(e.target.value)}
+              />
             </FormGroup>
             <FormGroup label="Industry *">
-              <select className="inp">
-                <option>Select...</option>
+              <select className="inp" value={industry} onChange={(e) => setIndustry(e.target.value)}>
+                <option value="">Select...</option>
                 <option>FMCG</option>
                 <option>Pharmaceutical</option>
                 <option>Health & Personal Care</option>
@@ -118,11 +167,17 @@ export function OnboardWizard() {
             </FormGroup>
           </div>
           <div className="fr2">
-            <FormGroup label="Contact Name *">
-              <input className="inp" placeholder="Primary contact" />
+            <FormGroup label="Phone">
+              <input className="inp" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </FormGroup>
             <FormGroup label="Contact Email *">
-              <input className="inp" type="email" placeholder="contact@domain.com" />
+              <input
+                className="inp"
+                type="email"
+                placeholder="contact@domain.com"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+              />
             </FormGroup>
           </div>
         </>
@@ -288,7 +343,7 @@ export function OnboardWizard() {
             else finish();
           }}
         >
-          {step === STEPS.length - 1 ? 'Activate Client Account ✓' : 'Continue →'}
+          {step === STEPS.length - 1 ? (saving ? 'Activating…' : 'Activate Client Account ✓') : 'Continue →'}
         </Button>
       </div>
     </>
