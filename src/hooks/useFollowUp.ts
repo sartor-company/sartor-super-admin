@@ -20,8 +20,8 @@ export function useOpenStaff() {
   const { openModal } = useModal();
 
   return useCallback(
-    (name: string | null) => {
-      openStaffModal(name);
+    (id: string | null) => {
+      openStaffModal(id);
       openModal('staff');
     },
     [openStaffModal, openModal],

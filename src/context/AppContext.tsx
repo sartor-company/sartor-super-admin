@@ -8,8 +8,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ROLES } from '../constants/roles';
 import type { Client } from '../data/clients';
 import { CLIENTS } from '../data/clients';
 import { useAuthStore } from '../store/authStore';
@@ -17,7 +15,6 @@ import type { InvestigationDetail, RoleId } from '../types';
 
 interface AppContextValue {
   role: RoleId;
-  setRole: (role: RoleId) => void;
   sidebarOpen: boolean;
   openSidebar: () => void;
   closeSidebar: () => void;
@@ -31,9 +28,9 @@ interface AppContextValue {
   setNotifOpen: (open: boolean) => void;
   notifDot: boolean;
   clearNotifDot: () => void;
-  staffEditName: string | null;
+  staffEditId: string | null;
   teamMemberEditName: string | null;
-  openStaffModal: (name: string | null) => void;
+  openStaffModal: (id: string | null) => void;
   openTeamMemberModal: (name: string | null) => void;
   registerNoteHandler: (handler: ((text: string) => void) | null) => void;
   submitClientNote: (text: string) => void;
@@ -42,7 +39,6 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const navigate = useNavigate();
   const authRole = useAuthStore((s) => s.user?.platformRole);
   const [role, setRoleState] = useState<RoleId>(authRole || 'super');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -55,7 +51,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [investigation, setInvestigation] = useState<InvestigationDetail | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifDot, setNotifDot] = useState(true);
-  const [staffEditName, setStaffEditName] = useState<string | null>(null);
+  const [staffEditId, setStaffEditId] = useState<string | null>(null);
   const [teamMemberEditName, setTeamMemberEditName] = useState<string | null>(null);
   const noteHandlerRef = useRef<((text: string) => void) | null>(null);
 
@@ -66,15 +62,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectedClient = useMemo(
     () => CLIENTS.find((c) => c.code === selectedClientCode) ?? null,
     [selectedClientCode],
-  );
-
-  const setRole = useCallback(
-    (next: RoleId) => {
-      setRoleState(next);
-      navigate(ROLES[next].defaultPath);
-      setSidebarOpen(false);
-    },
-    [navigate],
   );
 
   const openFollowUp = useCallback((client: string, message = '') => {
@@ -91,8 +78,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const clearNotifDot = useCallback(() => setNotifDot(false), []);
 
-  const openStaffModal = useCallback((name: string | null) => {
-    setStaffEditName(name);
+  const openStaffModal = useCallback((id: string | null) => {
+    setStaffEditId(id);
   }, []);
 
   const openTeamMemberModal = useCallback((name: string | null) => {
@@ -110,7 +97,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       role,
-      setRole,
       sidebarOpen,
       openSidebar: () => setSidebarOpen(true),
       closeSidebar: () => setSidebarOpen(false),
@@ -124,7 +110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setNotifOpen,
       notifDot,
       clearNotifDot,
-      staffEditName,
+      staffEditId,
       teamMemberEditName,
       openStaffModal,
       openTeamMemberModal,
@@ -133,7 +119,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       role,
-      setRole,
       sidebarOpen,
       selectedClient,
       followUp,
@@ -143,7 +128,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notifOpen,
       notifDot,
       clearNotifDot,
-      staffEditName,
+      staffEditId,
       teamMemberEditName,
       openStaffModal,
       openTeamMemberModal,

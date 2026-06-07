@@ -1,6 +1,8 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { ROLES } from '../../constants/roles';
 import { useApp } from '../../context/AppContext';
+import { useAuthStore } from '../../store/authStore';
+import { initialsFromName } from '../../utils/roleAccess';
 import { NavIcon } from '../icons/NavIcon';
 
 function navIsActive(path: string, finTab: string | undefined, pathname: string, search: string) {
@@ -15,8 +17,11 @@ function navIsActive(path: string, finTab: string | undefined, pathname: string,
 
 export function Sidebar() {
   const { role, sidebarOpen, closeSidebar } = useApp();
+  const user = useAuthStore((s) => s.user);
   const config = ROLES[role];
   const { pathname, search } = useLocation();
+  const displayName = user?.fullName || config.user;
+  const initials = user?.fullName ? initialsFromName(user.fullName) : config.initials;
 
   return (
     <>
@@ -62,10 +67,10 @@ export function Sidebar() {
         <div className="sfooter">
           <div className="suser">
             <div className="sav" style={{ background: config.avatarBg }}>
-              {config.initials}
+              {initials}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="sun">{config.user}</div>
+              <div className="sun">{displayName}</div>
               <div className="srt">{config.roleTitle}</div>
             </div>
             <span className={`spill ${config.pillClass}`}>{config.pill}</span>

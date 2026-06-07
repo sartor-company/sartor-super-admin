@@ -73,3 +73,31 @@ export interface InvestigationDetail {
   severity: 'P1' | 'P2' | 'P3';
   desc: string;
 }
+
+export interface PlatformSettings {
+  defaultVerifyDomain: string;
+  subdomainPattern: string;
+  doraTrainingSlaDays: number;
+  defaultPinDigits: number;
+  smsCreditAlertPercent: number;
+  pinCreditAlertPercent: number;
+  p1p2AlertToSupport: boolean;
+  nafdacMouSigned: boolean;
+  nafdacPortalUrl: string;
+  nafdacApiNamespace: string;
+  apiVersion: string;
+  rateLimitPerMinute: number;
+  webhookRetryCount: number;
+  updatedAt?: number;
+}
+
+export interface PlatformStaff {
+  _id: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  platformRole: RoleId;
+  blocked?: boolean;
+  online?: string;
+  userId?: string;
+}
