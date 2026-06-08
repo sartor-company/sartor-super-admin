@@ -20,8 +20,8 @@ interface AppContextValue {
   closeSidebar: () => void;
   selectedClient: Client | null;
   setSelectedClientCode: (code: string) => void;
-  followUp: { client: string; message: string; subject: string } | null;
-  openFollowUp: (client: string, message?: string) => void;
+  followUp: { client: string; clientId?: string; message: string; subject: string } | null;
+  openFollowUp: (client: string, message?: string, clientId?: string) => void;
   investigation: InvestigationDetail | null;
   openInvestigation: (detail: InvestigationDetail) => void;
   notifOpen: boolean;
@@ -45,6 +45,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedClientCode, setSelectedClientCode] = useState('SHC');
   const [followUp, setFollowUp] = useState<{
     client: string;
+    clientId?: string;
     message: string;
     subject: string;
   } | null>(null);
@@ -64,9 +65,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [selectedClientCode],
   );
 
-  const openFollowUp = useCallback((client: string, message = '') => {
+  const openFollowUp = useCallback((client: string, message = '', clientId?: string) => {
     setFollowUp({
       client,
+      clientId,
       message,
       subject: `Follow-up: ${client}`,
     });

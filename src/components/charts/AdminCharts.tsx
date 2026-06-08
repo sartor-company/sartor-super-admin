@@ -18,14 +18,22 @@ function ChartBox({ height, children }: { height: number; children: ReactNode })
   return <div style={{ position: 'relative', height, width: '100%' }}>{children}</div>;
 }
 
-export function PlatformScanChart({ height = 190 }: { height?: number }) {
+type SeriesProps = {
+  height?: number;
+  labels?: string[];
+  values?: number[];
+};
+
+export function PlatformScanChart({ height = 190, labels, values }: SeriesProps) {
+  const data = values ?? SCAN_VOLUME_DATA;
+  const lbls = labels ?? DAY_LABELS_14;
   return (
     <ChartBox height={height}>
       <Line
         data={{
-          labels: DAY_LABELS_14,
+          labels: lbls,
           datasets: [{
-            data: SCAN_VOLUME_DATA,
+            data,
             borderColor: '#FF5C35',
             backgroundColor: 'rgba(255,92,53,.07)',
             fill: true,
@@ -40,15 +48,23 @@ export function PlatformScanChart({ height = 190 }: { height?: number }) {
   );
 }
 
-export function RevenueBarChart({ height = 190 }: { height?: number }) {
+export function RevenueBarChart({
+  height = 190,
+  labels,
+  values,
+  colors,
+}: SeriesProps & { colors?: string[] }) {
+  const data = values ?? REVENUE_MONTHLY_DATA;
+  const lbls = labels ?? MONTH_LABELS;
+  const bg = colors ?? REVENUE_BAR_COLORS;
   return (
     <ChartBox height={height}>
       <Bar
         data={{
-          labels: MONTH_LABELS,
+          labels: lbls,
           datasets: [{
-            data: REVENUE_MONTHLY_DATA,
-            backgroundColor: REVENUE_BAR_COLORS,
+            data,
+            backgroundColor: bg,
             borderRadius: 4,
           }],
         }}
@@ -58,13 +74,19 @@ export function RevenueBarChart({ height = 190 }: { height?: number }) {
   );
 }
 
-export function RevenueDonutChart({ height = 145 }: { height?: number }) {
+export function RevenueDonutChart({
+  height = 145,
+  labels,
+  values,
+}: SeriesProps) {
+  const data = values ?? DONUT_VALUES;
+  const lbls = labels ?? ['SKU', 'Credits', 'CRM', 'Onboarding'];
   return (
     <ChartBox height={height}>
       <Doughnut
         data={{
-          labels: ['SKU', 'Credits', 'CRM', 'Onboarding'],
-          datasets: [{ data: DONUT_VALUES, backgroundColor: DONUT_COLORS, borderWidth: 0 }],
+          labels: lbls,
+          datasets: [{ data, backgroundColor: DONUT_COLORS, borderWidth: 0 }],
         }}
         options={doughnutOptions}
       />
@@ -72,14 +94,19 @@ export function RevenueDonutChart({ height = 145 }: { height?: number }) {
   );
 }
 
-export function OpsHealthChart({ height = 160 }: { height?: number }) {
+export function OpsHealthChart({ height = 160, labels, values }: SeriesProps) {
+  const data =
+    values ??
+    [100, 100, 99.8, 100, 100, 99.9, 100, 100, 100, 99.7, 100, 100, 100, 100];
+  const lbls = labels ?? DAY_LABELS_14;
+  const min = Math.min(95, ...data) - 0.5;
   return (
     <ChartBox height={height}>
       <Bar
         data={{
-          labels: DAY_LABELS_14,
+          labels: lbls,
           datasets: [{
-            data: [100, 100, 99.8, 100, 100, 99.9, 100, 100, 100, 99.7, 100, 100, 100, 100],
+            data,
             backgroundColor: '#1A2D7C',
             borderRadius: 3,
             barThickness: 12,
@@ -87,9 +114,17 @@ export function OpsHealthChart({ height = 160 }: { height?: number }) {
         }}
         options={{
           ...barChartOptions,
+          plugins: {
+            ...barChartOptions.plugins,
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${Number(ctx.raw).toFixed(1)}%`,
+              },
+            },
+          },
           scales: {
             ...barChartOptions.scales,
-            y: { ...barChartOptions.scales?.y, min: 99, max: 100.1 },
+            y: { ...barChartOptions.scales?.y, min, max: 100.1 },
           },
         }}
       />

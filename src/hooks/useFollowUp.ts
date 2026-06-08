@@ -7,8 +7,8 @@ export function useFollowUp() {
   const { openModal } = useModal();
 
   return useCallback(
-    (client: string, message = '') => {
-      openFollowUp(client, message);
+    (client: string, message = '', clientId?: string) => {
+      openFollowUp(client, message, clientId);
       openModal('followup');
     },
     [openFollowUp, openModal],

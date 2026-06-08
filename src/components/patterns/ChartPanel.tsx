@@ -13,11 +13,10 @@ export type ChartPanelKind =
   | 'revenue-donut'
   | 'ops-health';
 
-const CHARTS: Record<ChartPanelKind, React.ComponentType<{ height?: number }>> = {
-  'platform-scan': PlatformScanChart,
-  'revenue-bar': RevenueBarChart,
-  'revenue-donut': RevenueDonutChart,
-  'ops-health': OpsHealthChart,
+export type ChartSeries = {
+  labels?: string[];
+  values?: number[];
+  colors?: string[];
 };
 
 export function ChartPanel({
@@ -26,18 +25,29 @@ export function ChartPanel({
   height = 190,
   action,
   marginBottom = 0,
+  series,
 }: {
   title: string;
   chart: ChartPanelKind;
   height?: number;
   action?: ReactNode;
   marginBottom?: number;
+  series?: ChartSeries;
 }) {
-  const ChartView = CHARTS[chart];
+  const props = { height, ...series };
+  const ChartView =
+    chart === 'platform-scan'
+      ? PlatformScanChart
+      : chart === 'revenue-bar'
+        ? RevenueBarChart
+        : chart === 'revenue-donut'
+          ? RevenueDonutChart
+          : OpsHealthChart;
+
   return (
     <Card style={{ marginBottom }}>
       <CardHeader title={title} action={action} />
-      <ChartView height={height} />
+      <ChartView {...props} />
     </Card>
   );
 }

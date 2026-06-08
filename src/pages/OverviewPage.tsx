@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -17,7 +18,14 @@ export function OverviewPage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
-  const { overview, clients, loading } = usePlatform();
+  const { overview, clients, charts, loading } = usePlatform();
+  const scanSeries = useMemo(
+    () =>
+      charts?.scanVolume?.length
+        ? { labels: charts.scanVolume.map((d) => d.label), values: charts.scanVolume.map((d) => d.count) }
+        : undefined,
+    [charts],
+  );
   const cards = (overview?.cards || {}) as Record<string, number | string>;
   const health = (overview?.health || {}) as Record<string, string | number>;
   const overviewClients = (overview?.clients as typeof clients) || clients.slice(0, 6);
@@ -85,7 +93,12 @@ export function OverviewPage() {
       </div>
 
       <div className="r3" style={{ marginBottom: 14 }}>
-        <ChartPanel title="Platform scan volume — last 30 days" chart="platform-scan" marginBottom={0} />
+        <ChartPanel
+          title="Platform scan volume — last 30 days"
+          chart="platform-scan"
+          marginBottom={0}
+          series={scanSeries}
+        />
         <Card style={{ marginBottom: 0 }}>
           <CardHeader title="System health" />
           {healthRows.map((row) => (
@@ -156,7 +169,7 @@ export function OverviewPage() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          followUp(c.name, 'PIN credits critical at 8%.');
+                          followUp(c.name, 'PIN credits critical at 8%.', c._id);
                         }}
                       >
                         Alert
@@ -167,7 +180,7 @@ export function OverviewPage() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          followUp(c.name, 'SMS credits at 12%.');
+                          followUp(c.name, 'SMS credits at 12%.', c._id);
                         }}
                       >
                         Follow Up

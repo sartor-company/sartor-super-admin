@@ -15,15 +15,15 @@ export const ROLES: Record<RoleId, RoleConfig> = {
         title: 'Platform',
         items: [
           { label: 'Overview', path: '/', icon: 'grid' },
-          { label: 'All Clients', path: '/clients', icon: 'users', badge: 2 },
+          { label: 'All Clients', path: '/clients', icon: 'users', badgeKey: 'attentionClients' },
           { label: 'Platform Settings', path: '/settings', icon: 'cog' },
         ],
       },
       {
         title: 'Operations',
         items: [
-          { label: 'Onboarding Pipeline', path: '/onboarding', icon: 'flow', badge: 3 },
-          { label: 'DORA Training Queue', path: '/aiml/queue', icon: 'brain', badge: 7 },
+          { label: 'Onboarding Pipeline', path: '/onboarding', icon: 'flow', badgeKey: 'onboarding' },
+          { label: 'DORA Training Queue', path: '/aiml/queue', icon: 'brain', badgeKey: 'doraQueue' },
         ],
       },
       {
@@ -38,9 +38,9 @@ export const ROLES: Record<RoleId, RoleConfig> = {
       { title: 'Analytics', items: [{ label: 'Reports & Analytics', path: '/reports', icon: 'line' }] },
       {
         title: 'Security',
-        items: [{ label: 'Investigations', path: '/investigations', icon: 'alert', badge: 23 }],
+        items: [{ label: 'Investigations', path: '/investigations', icon: 'alert', badgeKey: 'investigations' }],
       },
-      { title: 'Support', items: [{ label: 'Support Queue', path: '/support', icon: 'help', badge: 5 }] },
+      { title: 'Support', items: [{ label: 'Support Queue', path: '/support', icon: 'help', badgeKey: 'support' }] },
     ],
   },
   ops: {
@@ -57,13 +57,13 @@ export const ROLES: Record<RoleId, RoleConfig> = {
       {
         title: 'Clients',
         items: [
-          { label: 'Onboarding Pipeline', path: '/onboarding', icon: 'flow', badge: 3 },
+          { label: 'Onboarding Pipeline', path: '/onboarding', icon: 'flow', badgeKey: 'onboarding' },
           { label: 'All Clients', path: '/clients', icon: 'users' },
         ],
       },
-      { title: 'AI & Training', items: [{ label: 'DORA Training Queue', path: '/aiml/queue', icon: 'brain', badge: 7 }] },
+      { title: 'AI & Training', items: [{ label: 'DORA Training Queue', path: '/aiml/queue', icon: 'brain', badgeKey: 'doraQueue' }] },
       { title: 'Analytics', items: [{ label: 'Reports & Analytics', path: '/reports', icon: 'line' }] },
-      { title: 'Support', items: [{ label: 'Support Queue', path: '/support', icon: 'help', badge: 5 }] },
+      { title: 'Support', items: [{ label: 'Support Queue', path: '/support', icon: 'help', badgeKey: 'support' }] },
     ],
   },
   am: {
@@ -84,7 +84,7 @@ export const ROLES: Record<RoleId, RoleConfig> = {
         ],
       },
       { title: 'Analytics', items: [{ label: 'My Reports', path: '/reports', icon: 'line' }] },
-      { title: 'Support', items: [{ label: 'Support Queue', path: '/support', icon: 'help' }] },
+      { title: 'Support', items: [{ label: 'Support Queue', path: '/support', icon: 'help', badgeKey: 'support' }] },
     ],
   },
   finance: {
@@ -124,7 +124,7 @@ export const ROLES: Record<RoleId, RoleConfig> = {
         title: 'DORA AI',
         items: [
           { label: 'Dashboard', path: '/aiml', icon: 'brain' },
-          { label: 'Training Queue', path: '/aiml/queue', icon: 'layers', badge: 7 },
+          { label: 'Training Queue', path: '/aiml/queue', icon: 'layers', badgeKey: 'doraQueue' },
         ],
       },
       { title: 'Clients', items: [{ label: 'All Clients', path: '/clients', icon: 'users' }] },
@@ -143,13 +143,13 @@ export const ROLES: Record<RoleId, RoleConfig> = {
       {
         title: 'Support',
         items: [
-          { label: 'Dashboard', path: '/support', icon: 'help', badge: 5 },
+          { label: 'Dashboard', path: '/support', icon: 'help', badgeKey: 'support' },
           { label: 'Client Lookup', path: '/clients', icon: 'users' },
         ],
       },
       {
         title: 'Security',
-        items: [{ label: 'Investigations', path: '/investigations', icon: 'alert', badge: 23 }],
+        items: [{ label: 'Investigations', path: '/investigations', icon: 'alert', badgeKey: 'investigations' }],
       },
     ],
   },
