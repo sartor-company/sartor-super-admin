@@ -98,4 +98,6 @@ export const platformApi = {
     apiClient.patch('/sartor/settings', body).then((r) => unwrap(r)),
 
   reports: () => apiClient.get('/sartor/reports/summary').then((r) => unwrap(r)),
+
+  charts: () => apiClient.get('/sartor/charts').then((r) => unwrap(r)),
 };

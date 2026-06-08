@@ -12,6 +12,7 @@ import type { Client } from '../data/clients';
 import type { InvestigationRow } from '../data/investigations';
 import type { OnboardingRow } from '../data/onboarding';
 import type { PlatformSettings, PlatformStaff } from '../types';
+import type { PlatformCharts } from '../utils/chartSeries';
 
 type PlatformState = {
   clients: Client[];
@@ -26,6 +27,7 @@ type PlatformState = {
   settings: PlatformSettings | null;
   financeSummary: Record<string, unknown> | null;
   reports: Record<string, unknown> | null;
+  charts: PlatformCharts | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -47,6 +49,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [financeSummary, setFinanceSummary] = useState<Record<string, unknown> | null>(null);
   const [reports, setReports] = useState<Record<string, unknown> | null>(null);
+  const [charts, setCharts] = useState<PlatformCharts | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,6 +75,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
         platformApi.settings(),
         platformApi.financeSummary(),
         platformApi.reports(),
+        platformApi.charts(),
       ]);
 
       const val = <T,>(i: number, fallback: T): T =>
@@ -89,6 +93,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       setSettings(val(9, null) as PlatformSettings | null);
       setFinanceSummary(val(10, null));
       setReports(val(11, null));
+      setCharts(val(12, null) as PlatformCharts | null);
 
       if (results[0].status === 'rejected') {
         const reason = results[0].reason;
@@ -119,6 +124,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       settings,
       financeSummary,
       reports,
+      charts,
       loading,
       error,
       refresh,
@@ -137,6 +143,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       settings,
       financeSummary,
       reports,
+      charts,
       loading,
       error,
       refresh,

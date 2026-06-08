@@ -36,11 +36,18 @@ export type ModalId =
   | 'assign'
   | 'edit-client';
 
+export type NavBadgeKey =
+  | 'attentionClients'
+  | 'onboarding'
+  | 'doraQueue'
+  | 'investigations'
+  | 'support';
+
 export interface NavItem {
   label: string;
   path: string;
   icon: NavIconKey;
-  badge?: number;
+  badgeKey?: NavBadgeKey;
   finTab?: string;
 }
 

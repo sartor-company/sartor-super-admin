@@ -1,6 +1,8 @@
 export type BadgeVariant = 'bg' | 'ba' | 'br' | 'bb' | 'bx' | 'bp' | 'bn';
 
 export interface Client {
+  smsCredits?: number;
+  pinCredits?: number;
   _id?: string;
   name: string;
   code: string;
