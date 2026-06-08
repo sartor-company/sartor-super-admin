@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { platformApi } from '../api/platform';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { FormGroup } from '../components/ui/FormGroup';
@@ -8,11 +9,30 @@ import { ProductPill } from '../components/ui/ProductPill';
 import { TabBar } from '../components/ui/TabBar';
 import { DonutLegend, InfoBanner, PageHeader } from '../components/patterns';
 import { Card, CardHeader } from '../components/ui/Card';
+import type { Client } from '../data/clients';
+import { usePlatform } from '../context/PlatformContext';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { RevenueBarChart, RevenueDonutChart } from '../components/charts/AdminCharts';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
 import { useTabs } from '../hooks/useTabs';
+import {
+  crmSeatRate,
+  formatDueLabel,
+  formatInvoiceAmount,
+  formatInvoiceDate,
+  invoiceStatusVariant,
+  isCreditSaleInvoice,
+  parseSeatsFromDescription,
+  type PlatformInvoiceRow,
+} from '../utils/financeDisplay';
+import { formatNaira } from '../utils/format';
+import { crmPillLabel, crmPillVariant } from '../utils/clientDisplay';
+import {
+  donutFromBreakdown,
+  revenueSeriesFromCharts,
+  revenueSeriesFromInvoices,
+} from '../utils/chartSeries';
 import { exportReport } from './shared';
 
 type FinTab = 'dash' | 'invoices' | 'crm' | 'credits';
@@ -28,6 +48,7 @@ export function FinancePage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
+  const { clients, invoices, financeSummary, charts, loading, refresh } = usePlatform();
 
   const urlTab = searchParams.get('finTab') as FinTab | null;
   const { active, setActive, isActive } = useTabs<FinTab>(
@@ -36,7 +57,11 @@ export function FinancePage() {
 
   const [invQuery, setInvQuery] = useState('');
   const [invStatus, setInvStatus] = useState('');
-  const [crmPreview, setCrmPreview] = useState('');
+  const [crmClientId, setCrmClientId] = useState('');
+  const [crmTierRate, setCrmTierRate] = useState('');
+  const [crmSeats, setCrmSeats] = useState('');
+  const [crmCycle, setCrmCycle] = useState('monthly');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (urlTab && FIN_TAB_IDS.includes(urlTab) && urlTab !== active) {
@@ -49,6 +74,107 @@ export function FinancePage() {
     setSearchParams({ finTab: tab }, { replace: true });
   };
 
+  const invoiceRows = invoices as unknown as PlatformInvoiceRow[];
+  const summary = financeSummary as {
+    paidTotal?: number;
+    mrr?: number;
+    outstandingTotal?: number;
+    overdueTotal?: number;
+    pendingInvoices?: number;
+    overdueInvoices?: number;
+    crmSubscriptions?: number;
+  } | null;
+
+  const filteredInvoices = useMemo(
+    () =>
+      invoiceRows.filter((row) => {
+        const q = invQuery.toLowerCase();
+        const okQ =
+          !q ||
+          `${row.invoiceId} ${row.clientName} ${row.clientCode} ${row.description}`
+            .toLowerCase()
+            .includes(q);
+        const okSt = !invStatus || row.status === invStatus;
+        return okQ && okSt;
+      }),
+    [invoiceRows, invQuery, invStatus],
+  );
+
+  const crmClients = useMemo(
+    () => (clients as Client[]).filter((c) => c.crm),
+    [clients],
+  );
+
+  const creditSales = useMemo(
+    () => invoiceRows.filter((inv) => isCreditSaleInvoice(inv.description)),
+    [invoiceRows],
+  );
+
+  const crmPreview = useMemo(() => {
+    const rate = Number(crmTierRate);
+    const seats = Number(crmSeats);
+    if (!rate || !seats) return '';
+    const monthly = rate * seats;
+    const total = crmCycle === 'annual' ? monthly * 12 * 0.8 : monthly;
+    return crmCycle === 'annual'
+      ? `Annual: ${seats} × ${formatNaira(rate)} × 12 × 80% = ${formatNaira(total)}`
+      : `Monthly: ${seats} × ${formatNaira(rate)} = ${formatNaira(monthly)}/month`;
+  }, [crmTierRate, crmSeats, crmCycle]);
+
+  const markPaid = async (inv: PlatformInvoiceRow) => {
+    try {
+      await platformApi.updateInvoice(inv._id, { status: 'Paid' });
+      await refresh();
+      showToast(`Payment recorded for ${inv.invoiceId}.`, 'success');
+    } catch {
+      showToast('Could not update invoice.', 'error');
+    }
+  };
+
+  const saveCrmSubscription = async (createInvoice: boolean) => {
+    const client = (clients as Client[]).find((c) => c._id === crmClientId);
+    if (!client?._id) {
+      showToast('Select a client.', 'error');
+      return;
+    }
+    const tierMap: Record<string, string> = {
+      '5000': 'Sales Navigator',
+      '12000': 'Sales Navigator Plus',
+      '25000': 'CRM 360',
+    };
+    const tier = tierMap[crmTierRate] || 'CRM';
+    const seats = Number(crmSeats) || 0;
+    setSaving(true);
+    try {
+      await platformApi.patchClient(client._id, {
+        crmEnabled: true,
+        crmTier: tier,
+      });
+      if (createInvoice && seats > 0) {
+        const rate = Number(crmTierRate);
+        const amount =
+          crmCycle === 'annual' ? rate * seats * 12 * 0.8 : rate * seats;
+        await platformApi.createInvoice({
+          adminId: client._id,
+          clientName: client.name,
+          clientCode: client.code,
+          description: `CRM subscription — ${tier} (${seats} seats)`,
+          amount,
+        });
+      }
+      await refresh();
+      showToast(
+        createInvoice ? 'Subscription saved. Invoice created.' : 'Subscription saved.',
+        'success',
+      );
+      if (createInvoice) openModal('invoice');
+    } catch {
+      showToast('Could not save subscription.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const tabs = [
     { id: 'dash' as const, label: 'Dashboard' },
     { id: 'invoices' as const, label: 'Invoices' },
@@ -56,40 +182,19 @@ export function FinancePage() {
     { id: 'credits' as const, label: 'SC Credit Sales' },
   ];
 
-  const invoices = useMemo(
-    () =>
-      [
-        { id: 'INV-2026-044', client: 'DankePharma', desc: 'SMS Credits 50K', amount: '₦200,000', issued: 'Apr 25', due: 'May 9 (overdue)', status: 'Overdue', st: 'Overdue' },
-        { id: 'INV-2026-047', client: 'NaturalKing', desc: 'PIN Credits 10K', amount: '₦150,000', issued: 'May 1', due: 'May 15', status: 'Due Soon', st: 'Due Soon' },
-        { id: 'INV-2026-049', client: 'FreshNow', desc: 'Pilot Programme Fee', amount: '₦3,500,000', issued: 'May 5', due: 'May 20', status: 'Pending', st: 'Pending' },
-        { id: 'INV-2026-031', client: 'Sartor Health', desc: 'CRM 360 Monthly Seats (12 × ₦25K)', amount: '₦300,000', issued: 'Apr 1', due: 'Apr 15', status: 'Paid', st: 'Paid' },
-        { id: 'INV-2026-028', client: 'AgriPack', desc: 'Sales Nav Plus 16 seats × ₦12K', amount: '₦192,000', issued: 'Apr 1', due: 'Apr 15', status: 'Paid', st: 'Paid' },
-      ].filter((row) => {
-        const q = invQuery.toLowerCase();
-        const okQ = !q || `${row.id} ${row.client}`.toLowerCase().includes(q);
-        const okSt = !invStatus || row.st === invStatus;
-        return okQ && okSt;
-      }),
-    [invQuery, invStatus],
-  );
+  const paidTotal = summary?.paidTotal ?? summary?.mrr ?? 0;
+  const outstanding = summary?.outstandingTotal ?? 0;
 
-  const calcFinCRM = () => {
-    const tier = (document.getElementById('fin-crm-tier') as HTMLSelectElement | null)?.value;
-    const seats = Number((document.getElementById('fin-crm-seats') as HTMLInputElement | null)?.value || 0);
-    const cycle = (document.getElementById('fin-crm-cycle') as HTMLSelectElement | null)?.value;
-    if (!tier || !seats) {
-      setCrmPreview('');
-      return;
-    }
-    const rate = Number(tier);
-    const monthly = rate * seats;
-    const total = cycle === 'annual' ? monthly * 12 * 0.8 : monthly;
-    setCrmPreview(
-      cycle === 'annual'
-        ? `Annual: ${seats} × ₦${rate.toLocaleString()} × 12 × 80% = ₦${total.toLocaleString()}`
-        : `Monthly: ${seats} × ₦${rate.toLocaleString()} = ₦${monthly.toLocaleString()}/month`,
-    );
-  };
+  const revenueSeries = useMemo(() => {
+    const fromApi = revenueSeriesFromCharts(charts);
+    if (fromApi) return fromApi;
+    return revenueSeriesFromInvoices(invoiceRows);
+  }, [charts, invoiceRows]);
+
+  const donutSeries = useMemo(
+    () => donutFromBreakdown(charts?.revenueBreakdown),
+    [charts],
+  );
 
   return (
     <>
@@ -110,25 +215,41 @@ export function FinancePage() {
 
       <TabBar tabs={tabs} active={active} onChange={setFinTab} />
 
+      {loading && !summary && invoiceRows.length === 0 && (
+        <p style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 12 }}>Loading finance data…</p>
+      )}
+
       <div id="fin-dash" data-g="fin-tabs" style={finPanelStyle(isActive('dash'))}>
         <KCardGrid columns={4}>
           <KCard
-            label="Monthly Recurring Revenue"
-            value="₦8.75M"
-            trend="↑ 12% MoM"
+            label="Total collected"
+            value={formatNaira(paidTotal)}
+            trend={`${invoiceRows.filter((i) => i.status === 'Paid').length} paid invoices`}
             trendType="up"
             accent
             valueStyle={{ fontSize: 20 }}
           />
-          <KCard label="CRM Subscription MRR" value="₦1.04M" trend="↑ 15%" trendType="up" valueStyle={{ fontSize: 20 }} />
           <KCard
-            label="Outstanding Invoices"
-            value="₦1.25M"
-            trend="3 invoices"
+            label="CRM subscriptions"
+            value={String(summary?.crmSubscriptions ?? crmClients.length)}
+            trend="Active CRM clients"
+            trendType="up"
+            valueStyle={{ fontSize: 20 }}
+          />
+          <KCard
+            label="Outstanding invoices"
+            value={formatNaira(outstanding)}
+            trend={`${summary?.pendingInvoices ?? 0} pending · ${summary?.overdueInvoices ?? 0} overdue`}
             trendType="dn"
             valueStyle={{ fontSize: 20, color: 'var(--at)' }}
           />
-          <KCard label="Onboarding Fees (YTD)" value="₦18M" trend="4 clients" trendType="up" valueStyle={{ fontSize: 20 }} />
+          <KCard
+            label="Overdue amount"
+            value={formatNaira(summary?.overdueTotal ?? 0)}
+            trend={`${summary?.overdueInvoices ?? 0} invoices`}
+            trendType="dn"
+            valueStyle={{ fontSize: 20 }}
+          />
         </KCardGrid>
         <div className="r3" style={{ marginBottom: 14 }}>
           <Card style={{ marginBottom: 0 }}>
@@ -140,44 +261,60 @@ export function FinancePage() {
                 </Button>
               }
             />
-            {isActive('dash') && <RevenueBarChart height={190} />}
+            {isActive('dash') && (
+              <RevenueBarChart
+                height={190}
+                labels={revenueSeries.labels}
+                values={revenueSeries.values}
+                colors={revenueSeries.colors}
+              />
+            )}
           </Card>
           <Card style={{ marginBottom: 0 }}>
             <CardHeader title="Revenue breakdown" />
-            {isActive('dash') && <RevenueDonutChart height={145} />}
-            <DonutLegend marginTop={7} />
+            {isActive('dash') && (
+              <RevenueDonutChart
+                height={145}
+                labels={donutSeries.labels}
+                values={donutSeries.values}
+              />
+            )}
+            <DonutLegend items={donutSeries.legend} marginTop={7} />
           </Card>
         </div>
       </div>
 
       <div id="fin-invoices" data-g="fin-tabs" style={finPanelStyle(isActive('invoices'))}>
-          <div className="ch" style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                className="inp"
-                style={{ width: 220 }}
-                placeholder="Search invoice or client..."
-                value={invQuery}
-                onChange={(e) => setInvQuery(e.target.value)}
-              />
-              <select className="inp" style={{ width: 140 }} value={invStatus} onChange={(e) => setInvStatus(e.target.value)}>
-                <option value="">All Statuses</option>
-                <option value="Overdue">Overdue</option>
-                <option value="Due Soon">Due Soon</option>
-                <option value="Pending">Pending</option>
-                <option value="Paid">Paid</option>
-              </select>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Invoices', 'csv')}>
-                ↓ Export CSV
-              </Button>
-              <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
-                + New Invoice
-              </Button>
-            </div>
+        <div className="ch" style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              className="inp"
+              style={{ width: 220 }}
+              placeholder="Search invoice or client..."
+              value={invQuery}
+              onChange={(e) => setInvQuery(e.target.value)}
+            />
+            <select className="inp" style={{ width: 140 }} value={invStatus} onChange={(e) => setInvStatus(e.target.value)}>
+              <option value="">All Statuses</option>
+              <option value="Overdue">Overdue</option>
+              <option value="Due Soon">Due Soon</option>
+              <option value="Pending">Pending</option>
+              <option value="Paid">Paid</option>
+            </select>
           </div>
-          <Card>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Invoices', 'csv')}>
+              ↓ Export CSV
+            </Button>
+            <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
+              + New Invoice
+            </Button>
+          </div>
+        </div>
+        <Card>
+          {filteredInvoices.length === 0 ? (
+            <p style={{ color: 'var(--text3)', fontSize: 13 }}>No invoices found.</p>
+          ) : (
             <table>
               <thead>
                 <tr>
@@ -192,54 +329,59 @@ export function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((row) => (
-                  <tr key={row.id}>
-                    <td style={{ fontFamily: "'DM Mono', monospace", fontSize: 11 }}>{row.id}</td>
-                    <td>{row.client}</td>
-                    <td>{row.desc}</td>
-                    <td>{row.amount}</td>
-                    <td>{row.issued}</td>
-                    <td style={{ color: row.st === 'Overdue' ? 'var(--rt)' : undefined }}>{row.due}</td>
-                    <td>
-                      <Badge variant={row.st === 'Overdue' ? 'br' : row.st === 'Due Soon' ? 'ba' : row.st === 'Paid' ? 'bg' : 'bx'}>
-                        {row.status}
-                      </Badge>
+                {filteredInvoices.map((row) => (
+                  <tr key={row._id}>
+                    <td style={{ fontFamily: "'DM Mono', monospace", fontSize: 11 }}>{row.invoiceId}</td>
+                    <td>{row.clientName || row.clientCode || '—'}</td>
+                    <td>{row.description || '—'}</td>
+                    <td>{formatInvoiceAmount(row.amount)}</td>
+                    <td>{formatInvoiceDate(row.issuedAt)}</td>
+                    <td style={{ color: row.status === 'Overdue' ? 'var(--rt)' : undefined }}>
+                      {formatDueLabel(row.dueAt, row.status)}
                     </td>
                     <td>
-                      {row.st === 'Overdue' && (
+                      <Badge variant={invoiceStatusVariant(row.status)}>{row.status}</Badge>
+                    </td>
+                    <td>
+                      {row.status === 'Overdue' && (
                         <Button
                           variant="danger"
                           size="sm"
                           onClick={() =>
-                            followUp('DankePharma Ltd', `${row.id} (${row.amount}) is 3 days overdue.`)
+                            followUp(
+                              row.clientName || 'Client',
+                              `${row.invoiceId} (${formatInvoiceAmount(row.amount)}) is overdue.`,
+                              typeof row.admin === 'string' ? row.admin : undefined,
+                            )
                           }
                         >
                           Chase
                         </Button>
                       )}
-                      {row.st === 'Due Soon' && (
+                      {row.status === 'Due Soon' && (
                         <Button
                           variant="secondary"
                           size="sm"
                           onClick={() =>
-                            followUp('NaturalKing FMCG', `${row.id} (${row.amount}) due May 15.`)
+                            followUp(
+                              row.clientName || 'Client',
+                              `${row.invoiceId} (${formatInvoiceAmount(row.amount)}) due soon.`,
+                              typeof row.admin === 'string' ? row.admin : undefined,
+                            )
                           }
                         >
                           Remind
                         </Button>
                       )}
-                      {row.st === 'Pending' && (
+                      {row.status === 'Pending' && (
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <Button variant="secondary" size="sm" onClick={() => showToast('Invoice viewed.')}>
-                            View
-                          </Button>
-                          <Button variant="success" size="sm" onClick={() => showToast('Payment recorded for INV-2026-049.', 'success')}>
+                          <Button variant="success" size="sm" onClick={() => markPaid(row)}>
                             Mark Paid
                           </Button>
                         </div>
                       )}
-                      {row.st === 'Paid' && (
-                        <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, `${row.id} Receipt`)}>
+                      {row.status === 'Paid' && (
+                        <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, `${row.invoiceId} Receipt`)}>
                           Receipt
                         </Button>
                       )}
@@ -248,245 +390,187 @@ export function FinancePage() {
                 ))}
               </tbody>
             </table>
-          </Card>
+          )}
+        </Card>
       </div>
 
       <div id="fin-crm" data-g="fin-tabs" style={finPanelStyle(isActive('crm'))}>
         <InfoBanner>
-          ℹ All CRM tiers are billed per seat per month. SN: ₦5,000 · Sales Nav+: ₦12,000 · CRM 360: ₦25,000. Annual billing available at 20% discount.
+          ℹ CRM tiers: SN ₦5,000 · Sales Nav+ ₦12,000 · CRM 360 ₦25,000 per seat/month. Annual billing at 20% discount.
         </InfoBanner>
-          <Card>
-            <CardHeader
-              title="Active CRM subscriptions"
-              action={
-                <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'CRM Subscriptions', 'csv')}>
-                  ↓ CSV
-                </Button>
-              }
-            />
+        <Card>
+          <CardHeader
+            title="Active CRM subscriptions"
+            action={
+              <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'CRM Subscriptions', 'csv')}>
+                ↓ CSV
+              </Button>
+            }
+          />
+          {crmClients.length === 0 ? (
+            <p style={{ color: 'var(--text3)', fontSize: 13 }}>No active CRM subscriptions.</p>
+          ) : (
             <table>
               <thead>
                 <tr>
                   <th>Client</th>
                   <th>Tier</th>
-                  <th>Active Seats</th>
+                  <th>Est. seats</th>
                   <th>Rate</th>
-                  <th>Monthly Total</th>
-                  <th>Annual (20% off)</th>
-                  <th>Next Billing</th>
+                  <th>Monthly est.</th>
+                  <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>
-                    <strong>Sartor Health Co. Ltd</strong>
-                  </td>
-                  <td>
-                    <ProductPill variant="360">CRM 360</ProductPill>
-                  </td>
-                  <td>12</td>
-                  <td>₦25,000/seat/month</td>
-                  <td style={{ fontWeight: 600 }}>₦300,000</td>
-                  <td>₦2,880,000</td>
-                  <td>May 30, 2026</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <Button variant="secondary" size="sm" onClick={() => openModal('seatadj')}>
-                        Adjust Seats
-                      </Button>
-                      <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
-                        Invoice
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <strong>AgriPack Ltd</strong>
-                  </td>
-                  <td>
-                    <ProductPill variant="snp">Sales Nav+</ProductPill>
-                  </td>
-                  <td>16</td>
-                  <td>₦12,000/seat/month</td>
-                  <td style={{ fontWeight: 600 }}>₦192,000</td>
-                  <td>₦1,843,200</td>
-                  <td>May 30, 2026</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <Button variant="secondary" size="sm" onClick={() => openModal('seatadj')}>
-                        Adjust Seats
-                      </Button>
-                      <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
-                        Invoice
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <strong>TechBev Nigeria Ltd</strong>
-                  </td>
-                  <td>
-                    <ProductPill variant="sn">Sales Navigator</ProductPill>
-                  </td>
-                  <td>8</td>
-                  <td>₦5,000/seat/month</td>
-                  <td style={{ fontWeight: 600 }}>₦40,000</td>
-                  <td>₦384,000</td>
-                  <td>May 30, 2026</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <Button variant="secondary" size="sm" onClick={() => openModal('seatadj')}>
-                        Adjust Seats
-                      </Button>
-                      <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
-                        Invoice
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
+                {crmClients.map((c) => {
+                  const rate = crmSeatRate(c.crm);
+                  const seats =
+                    parseSeatsFromDescription(
+                      invoiceRows.find((i) => i.clientCode === c.code && i.description?.includes('CRM'))
+                        ?.description,
+                    ) ?? '—';
+                  const seatNum = typeof seats === 'number' ? seats : 0;
+                  const crmVar = crmPillVariant(c.crm);
+                  const crmLbl = crmPillLabel(c.crm);
+                  return (
+                    <tr key={c.code}>
+                      <td>
+                        <strong>{c.name}</strong>
+                      </td>
+                      <td>{crmVar && crmLbl && <ProductPill variant={crmVar}>{crmLbl}</ProductPill>}</td>
+                      <td>{seats}</td>
+                      <td>{rate ? `${formatNaira(rate)}/seat/month` : '—'}</td>
+                      <td style={{ fontWeight: 600 }}>{seatNum ? formatNaira(rate * seatNum) : '—'}</td>
+                      <td>
+                        <Badge variant={c.status === 'Attention' ? 'ba' : 'bg'}>{c.status}</Badge>
+                      </td>
+                      <td>
+                        <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
+                          Invoice
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-          </Card>
-          <Card>
-            <CardHeader title="Add or update CRM subscription" />
-            <div className="fr2">
-              <FormGroup label="Client *">
-                <select className="inp" id="fin-crm-client" defaultValue="">
-                  <option value="">Select client...</option>
-                  <option>Sartor Health Co. Ltd</option>
-                  <option>DankePharma Ltd</option>
-                  <option>NaturalKing FMCG</option>
-                  <option>Bright Home Products</option>
-                  <option>FreshNow Consumer</option>
-                  <option>TechBev Nigeria Ltd</option>
-                  <option>AgriPack Ltd</option>
-                </select>
-              </FormGroup>
-              <FormGroup label="CRM Tier *">
-                <select className="inp" id="fin-crm-tier" onChange={calcFinCRM} defaultValue="">
-                  <option value="">Select tier...</option>
-                  <option value="5000">Sales Navigator — ₦5,000/seat/month</option>
-                  <option value="12000">Sales Navigator Plus — ₦12,000/seat/month</option>
-                  <option value="25000">CRM 360 — ₦25,000/seat/month</option>
-                </select>
-              </FormGroup>
-            </div>
-            <div className="fr2">
-              <FormGroup label="Number of Seats *">
-                <input type="number" className="inp" id="fin-crm-seats" placeholder="e.g. 10" min={1} onInput={calcFinCRM} />
-              </FormGroup>
-              <FormGroup label="Billing Cycle">
-                <select className="inp" id="fin-crm-cycle" onChange={calcFinCRM} defaultValue="monthly">
-                  <option value="monthly">Monthly</option>
-                  <option value="annual">Annual (20% discount)</option>
-                </select>
-              </FormGroup>
-            </div>
-            {crmPreview && (
-              <div style={{ padding: '10px 13px', background: 'var(--gb)', borderRadius: 7, fontSize: 13, color: 'var(--gt)', marginBottom: 13 }}>
-                {crmPreview}
-              </div>
-            )}
-            <FormGroup label="Notes">
-              <input className="inp" placeholder="e.g. Upgrade from SN to SNP, 4 additional seats" />
-            </FormGroup>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Button
-                className="bacc"
-                size="sm"
-                onClick={() => {
-                  showToast('Subscription saved. Invoice created.', 'success');
-                  openModal('invoice');
-                }}
+          )}
+        </Card>
+        <Card>
+          <CardHeader title="Add or update CRM subscription" />
+          <div className="fr2">
+            <FormGroup label="Client *">
+              <select
+                className="inp"
+                value={crmClientId}
+                onChange={(e) => setCrmClientId(e.target.value)}
               >
-                Save Subscription & Create Invoice
-              </Button>
-              <Button className="bsec" size="sm" onClick={() => showToast('Subscription saved.', 'success')}>
-                Save Without Invoice
-              </Button>
+                <option value="">Select client...</option>
+                {(clients as Client[]).map((c) => (
+                  <option key={c._id || c.code} value={c._id || ''}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </FormGroup>
+            <FormGroup label="CRM Tier *">
+              <select
+                className="inp"
+                value={crmTierRate}
+                onChange={(e) => setCrmTierRate(e.target.value)}
+              >
+                <option value="">Select tier...</option>
+                <option value="5000">Sales Navigator — ₦5,000/seat/month</option>
+                <option value="12000">Sales Navigator Plus — ₦12,000/seat/month</option>
+                <option value="25000">CRM 360 — ₦25,000/seat/month</option>
+              </select>
+            </FormGroup>
+          </div>
+          <div className="fr2">
+            <FormGroup label="Number of Seats *">
+              <input
+                type="number"
+                className="inp"
+                placeholder="e.g. 10"
+                min={1}
+                value={crmSeats}
+                onChange={(e) => setCrmSeats(e.target.value)}
+              />
+            </FormGroup>
+            <FormGroup label="Billing Cycle">
+              <select className="inp" value={crmCycle} onChange={(e) => setCrmCycle(e.target.value)}>
+                <option value="monthly">Monthly</option>
+                <option value="annual">Annual (20% discount)</option>
+              </select>
+            </FormGroup>
+          </div>
+          {crmPreview && (
+            <div style={{ padding: '10px 13px', background: 'var(--gb)', borderRadius: 7, fontSize: 13, color: 'var(--gt)', marginBottom: 13 }}>
+              {crmPreview}
             </div>
-          </Card>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button className="bacc" size="sm" disabled={saving} onClick={() => saveCrmSubscription(true)}>
+              Save Subscription & Create Invoice
+            </Button>
+            <Button className="bsec" size="sm" disabled={saving} onClick={() => saveCrmSubscription(false)}>
+              Save Without Invoice
+            </Button>
+          </div>
+        </Card>
       </div>
 
       <div id="fin-credits" data-g="fin-tabs" style={finPanelStyle(isActive('credits'))}>
         <Card>
           <CardHeader
-            title="SartorChain credit bundle sales (30d)"
+            title="SartorChain credit bundle sales"
             action={
               <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Credit Sales', 'csv')}>
                 ↓ CSV
               </Button>
             }
           />
+          {creditSales.length === 0 ? (
+            <p style={{ color: 'var(--text3)', fontSize: 13 }}>No credit sales invoices yet.</p>
+          ) : (
             <table>
               <thead>
                 <tr>
                   <th>Client</th>
                   <th>Product</th>
-                  <th>Credit Type</th>
-                  <th>Qty</th>
+                  <th>Description</th>
                   <th>Revenue</th>
                   <th>Date</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  ['Sartor Health', 'SMS Starter 10K', '10,000', '₦45,000', 'Apr 1'],
-                  ['Sartor Health', 'PIN Entry 10K', '10,000', '₦150,000', 'Mar 15'],
-                  ['Bright Home', 'Batch Cal. Starter 5cr', '5 credits', '₦800,000', 'Apr 10'],
-                  ['DankePharma', 'SMS Standard 50K', '50,000', '₦200,000', 'Apr 5'],
-                  ['NaturalKing', 'PIN Entry 10K', '10,000', '₦150,000', 'Apr 3'],
-                ].map((r) => (
-                  <tr key={r[0] + r[1]}>
-                    <td>{r[0]}</td>
+                {creditSales.map((inv) => (
+                  <tr key={inv._id}>
+                    <td>{inv.clientName || inv.clientCode}</td>
                     <td>
                       <ProductPill variant="growth">SC</ProductPill>
                     </td>
-                    <td>{r[1]}</td>
-                    <td>{r[2]}</td>
-                    <td>{r[3]}</td>
-                    <td>{r[4]}</td>
+                    <td>{inv.description}</td>
+                    <td>{formatInvoiceAmount(inv.amount)}</td>
+                    <td>{formatInvoiceDate(inv.issuedAt)}</td>
+                    <td>
+                      <Badge variant={invoiceStatusVariant(inv.status)}>{inv.status}</Badge>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </Card>
+          )}
+        </Card>
         <Card>
-          <CardHeader title="Add SartorChain credits to client account" />
-            <div className="fr3">
-              <FormGroup label="Client">
-                <select className="inp" defaultValue="">
-                  <option>Select client...</option>
-                  <option>Sartor Health Co. Ltd</option>
-                  <option>DankePharma Ltd</option>
-                  <option>NaturalKing FMCG</option>
-                  <option>Bright Home Products</option>
-                </select>
-              </FormGroup>
-              <FormGroup label="Credit Type">
-                <select className="inp">
-                  <option>Batch Calibration</option>
-                  <option>PIN Authentication</option>
-                  <option>SMS Notifications</option>
-                </select>
-              </FormGroup>
-              <FormGroup label="Quantity">
-                <input type="number" className="inp" placeholder="e.g. 10,000" />
-              </FormGroup>
-            </div>
-            <div className="fr2">
-              <FormGroup label="Amount Charged (₦)">
-                <input className="inp" placeholder="₦ invoiced" />
-              </FormGroup>
-              <FormGroup label="Invoice Reference">
-                <input className="inp" placeholder="INV-2026-XXX" />
-              </FormGroup>
-            </div>
-          <Button className="bacc" size="sm" onClick={() => showToast('Credits added and transaction logged.', 'success')}>
-            Add Credits & Log Transaction
+          <CardHeader title="Add credits via invoice" />
+          <InfoBanner>
+            Create an invoice with SMS, PIN, batch, or calibration in the description — credits are applied automatically on Paystack payment when configured.
+          </InfoBanner>
+          <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
+            Create credit sale invoice
           </Button>
         </Card>
       </div>
