@@ -8,13 +8,19 @@ Copy `.env.example` → `.env.local`:
 VITE_API_BASE_URL=http://localhost:4000/api/v1
 ```
 
-Backend: copy `crm-server-beta/.env.example` → `.env` and set `MONGO_URL`, `SECRET_KEY`, `ZEPTOMAIL_*`, optional `PAYSTACK_*`.
+Backend: copy `crm-server-beta/.env.example` → `.env` and set `MONGO_URL`, `SECRET_KEY`, `ZEPTOMAIL_*`, optional `PAYSTACK_*`, `PLATFORM_CONSOLE_URL`.
 
 Register a platform user:
 
 ```http
 POST /api/v1/auth/sartor/register
 { "fullName": "...", "email": "...", "password": "...", "platformRole": "super" }
+```
+
+Or seed the default super admin:
+
+```bash
+cd crm-server-beta && npm run seed:super-admin
 ```
 
 Login (super-admin app):
@@ -64,8 +70,9 @@ If a role calls an endpoint without permission → **403**.
 
 1. **Login** — only `accountType === "sartor"` is accepted.
 2. **`platformRole` from API** sets `AppContext` role → sidebar nav from `constants/roles.ts`.
-3. **Dev-only** — top “Internal role” bar switches UI for demos; production should rely on login role only.
-4. **Nav is not yet permission-filtered** — hiding a link does not replace server checks; unauthorized API calls still fail with 403.
+3. **Route guards** — `RoleGuard` blocks paths outside the role’s nav.
+4. **Sidebar badges** — live counts from `PlatformProvider` (attention clients, onboarding, DORA queue, investigations, support tickets).
+5. **Nav is not a security boundary** — hiding a link does not replace server checks; unauthorized API calls still fail with 403.
 
 ### Tenant roles (separate)
 
@@ -73,14 +80,28 @@ Client companies use `model-admin` (**Owner**) and `model-user` (Sales Rep, etc.
 
 ---
 
-## What should be real data from the backend
+## What is live from the backend
 
-Treat every number in the design as **eventually** from API. Today:
+`PlatformProvider` loads on app start via `Promise.allSettled` (partial 403s do not break the shell).
 
-**Already live in UI (via `PlatformProvider`):** Overview cards, client list, client detail (fetch), onboarding pipeline, investigations, support tickets, DORA awaiting queue, onboard wizard POST.
+| Area | API | UI |
+|------|-----|-----|
+| Overview cards & health | `GET /sartor/overview` | OverviewPage |
+| Scan volume chart | `GET /sartor/charts` | OverviewPage |
+| Ops health timeline | `GET /sartor/charts` | OpsDashboardPage |
+| Clients list & detail | `GET /sartor/clients`, `GET /sartor/clients/:code` | Clients, ClientDetail |
+| Onboarding | `GET/POST/PATCH /sartor/onboarding`, `POST /sartor/onboard` | Onboarding, OnboardWizard |
+| Finance | `GET /sartor/finance/summary`, invoices CRUD | FinancePage |
+| Revenue charts | `GET /sartor/charts` + invoice rollups | Finance, Reports |
+| Reports tabs | overview + clients + invoices + tickets + investigations | ReportsPage |
+| DORA queue | `GET /sartor/dora/queue`, `GET /sartor/dora/stats` | AimlQueue, AimlDashboard |
+| Investigations | `GET/POST/PATCH /sartor/investigations` | InvestigationsPage |
+| Support | `GET/POST/PATCH /sartor/tickets` | SupportPage |
+| Settings & staff | `GET/PATCH /sartor/settings`, `GET/POST/PATCH /sartor/staff` | SettingsPage, StaffModal |
+| Follow-up email | `POST /sartor/clients/:id/follow-up` | FollowUpModal |
+| Create invoice | `POST /sartor/invoices` | InvoiceModal |
+| Staff welcome email | sent on `POST /sartor/staff` | StaffModal create |
 
-**Live API but UI still shows mock in places:** Finance page tables, Reports tabs, Settings staff table, AIML dashboard, Ops/AM dashboards, DORA “in training” / “review” tabs, sidebar badges (hardcoded counts in `roles.ts`).
+**Still placeholder / static in places:** overview `platformAuthRate`, health uptime/p95/SMS percentages (shown from overview API but not yet computed from telemetry).
 
-**Backend placeholders to replace with real metrics:** `platformAuthRate`, health uptime/p95/SMS, overview chart time-series.
-
-When wiring remaining screens, use `usePlatform()` or `platformApi.*` — do not read from `src/data/*.ts` except as TypeScript shapes.
+When wiring new screens, use `usePlatform()` or `platformApi.*` — do not read from `src/data/*.ts` except as TypeScript shapes.
