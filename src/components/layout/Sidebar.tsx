@@ -40,11 +40,7 @@ export function Sidebar() {
       />
       <nav id="sidebar" className={sidebarOpen ? 'mob-open' : ''}>
         <div className="slogo">
-          <div className="smark">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 2L3 7v5c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V7L12 2z" fill="#fff" />
-            </svg>
-          </div>
+          <img className="smark brand-logo" src="/sartor-logo.jpg" alt="Sartor Health logo" width={34} height={34} />
           <div>
             <div className="sname">Sartor Ecosystem</div>
             <div className="stag">Internal Console v9</div>

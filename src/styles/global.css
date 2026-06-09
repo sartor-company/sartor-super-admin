@@ -26,6 +26,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);dis
 .slogo{padding:16px 16px 13px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.07)}
 .smark{width:34px;height:34px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .smark svg{width:18px;height:18px;fill:#fff}
+.brand-logo{object-fit:cover;background:transparent;display:block}
 .sname{font-size:13px;font-weight:700;color:#fff}.stag{font-size:9px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px;margin-top:1px}
 .nsec{padding:10px 8px 2px}
 .nlbl{font-size:9px;color:rgba(255,255,255,.25);letter-spacing:.8px;text-transform:uppercase;padding:0 8px;margin-bottom:3px;font-weight:500}
@@ -184,8 +185,9 @@ tr.cl{cursor:pointer}
 .login-hero-overlay{position:absolute;inset:0;background:linear-gradient(160deg,rgba(6,13,36,.72) 0%,rgba(11,22,64,.55) 45%,rgba(255,92,53,.35) 100%)}
 .login-hero-content{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;justify-content:center;padding:48px 56px;color:#fff;max-width:560px}
 .login-hero-brand{display:flex;align-items:center;gap:12px;margin-bottom:36px;font-size:13px;font-weight:700;letter-spacing:.12em;color:rgba(255,255,255,.92)}
-.login-hero-mark{width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.login-hero-mark{width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
 .login-hero-mark svg{width:18px;height:18px;fill:#fff}
+.login-hero-mark.brand-logo{background:transparent}
 .login-hero-title{font-size:clamp(2rem,4vw,2.75rem);font-weight:700;line-height:1.15;letter-spacing:-.02em;margin-bottom:16px}
 .login-hero-sub{font-size:15px;line-height:1.6;color:rgba(255,255,255,.78);max-width:420px;margin-bottom:32px}
 .login-hero-pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:auto;padding-top:24px}

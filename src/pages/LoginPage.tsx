@@ -78,11 +78,7 @@ export function LoginPage() {
         <div className="login-hero-overlay" />
         <div className="login-hero-content">
           <div className="login-hero-brand">
-            <div className="login-hero-mark">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 2L2 7l10 5 10-5-10-5zm0 8.5L4.5 7.5 12 4l7.5 3.5L12 10.5zm0 2.5l10-5v5.5l-10 5-10-5V8l10 5z" />
-              </svg>
-            </div>
+            <img className="login-hero-mark brand-logo" src="/sartor-logo.jpg" alt="Sartor Health logo" width={36} height={36} />
             <span>SARTOR</span>
           </div>
           <h1 className="login-hero-title">
