@@ -6,6 +6,7 @@ import { usePlatform } from '../context/PlatformContext';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
 import { formatNaira } from '../utils/format';
+import { calcCrmBilling, calcOnboardingTotal } from '../utils/pricing';
 
 const STEPS = ['Company Information', 'Products & Engagement', 'Admin Account Setup', 'Review & Activate'];
 
@@ -41,25 +42,33 @@ export function OnboardWizard() {
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
 
+  const [feeReceived, setFeeReceived] = useState('');
+  const [feeConfirm, setFeeConfirm] = useState(false);
+
   const onboardingFee = eng === 'pilot' ? 3500000 : 4500000;
   const skuCount = parseInt(skuN, 10) || 0;
   const scBand = eng === 'pilot' ? 'Pilot' : skuCount > 0 ? scBandFromSkus(skuCount) : 'Pilot';
 
   const obCrmBilling = () => {
-    const rate = crmRate;
     const seats = parseInt(crmSeats, 10) || 0;
-    if (!rate || !seats) return null;
-    const monthly = rate * seats;
-    const annual = monthly * 12 * 0.8;
-    const label =
-      crmCycle === 'annual'
-        ? `${formatNaira(annual)} annually (20% off · ${formatNaira(monthly)}/month equivalent)`
-        : `${formatNaira(monthly)}/month`;
+    if (!crmRate || !seats) return null;
+    const bill = calcCrmBilling(crmRate, seats, crmCycle === 'annual');
     return (
       <div style={{ padding: 9, background: 'var(--gb)', borderRadius: 7, fontSize: 12, color: 'var(--gt)', marginTop: 8 }}>
-        <strong>{crmName}</strong> · {seats} seat{seats > 1 ? 's' : ''} · {formatNaira(rate)}/seat/month
+        <strong>{crmName}</strong> · {seats} seat{seats > 1 ? 's' : ''} · {formatNaira(crmRate)}/seat/month
         <br />
-        Total: <strong>{label}</strong>
+        {crmCycle === 'annual' ? (
+          <>
+            List price: {formatNaira(bill.yearlyList!)}/yr · <strong>20% off</strong> · Save{' '}
+            {formatNaira(bill.savings!)}
+            <br />
+            Due: <strong>{formatNaira(bill.total)}</strong> ({formatNaira(bill.monthlyEffective!)}/mo effective)
+          </>
+        ) : (
+          <>
+            Due: <strong>{bill.label}</strong>
+          </>
+        )}
       </div>
     );
   };
@@ -100,6 +109,19 @@ export function OnboardWizard() {
     );
   };
 
+  const billing = useMemo(
+    () =>
+      calcOnboardingTotal({
+        engagement: eng,
+        skuCount,
+        crmOn,
+        crmRate,
+        crmSeats: parseInt(crmSeats, 10) || 0,
+        crmCycle,
+      }),
+    [eng, skuCount, crmOn, crmRate, crmSeats, crmCycle],
+  );
+
   const validateStep = (s: number): boolean => {
     if (s === 0) {
       if (!companyName.trim() || !rcNumber.trim() || !industry || !contactEmail.trim()) {
@@ -117,11 +139,30 @@ export function OnboardWizard() {
         showToast('Enter initial SKU count for full deployment.', 'error');
         return false;
       }
+      const received = parseInt(feeReceived.replace(/\D/g, ''), 10) || 0;
+      if (!received) {
+        showToast('Enter the fee amount received.', 'error');
+        return false;
+      }
+      if (received !== billing.grandTotal) {
+        showToast(
+          `Fee received (${formatNaira(received)}) must match total due (${formatNaira(billing.grandTotal)}).`,
+          'error',
+        );
+        return false;
+      }
       return true;
     }
     if (s === 2) {
       if (!adminFirstName.trim() || !adminLastName.trim() || !adminEmail.trim()) {
         showToast('Admin first name, last name, and login email are required.', 'error');
+        return false;
+      }
+      return true;
+    }
+    if (s === 3) {
+      if (!feeConfirm) {
+        showToast('Confirm payment receipt before activating.', 'error');
         return false;
       }
       return true;
@@ -135,8 +176,8 @@ export function OnboardWizard() {
     else finish();
   };
 
-  const reviewLines = useMemo(
-    () => [
+  const reviewLines = useMemo(() => {
+    const lines = [
       { label: 'Company', value: companyName || '—' },
       { label: 'RC Number', value: rcNumber || '—' },
       { label: 'Industry', value: industry || '—' },
@@ -145,22 +186,58 @@ export function OnboardWizard() {
       { label: 'SC Band', value: scBand },
       { label: 'CRM', value: crmOn ? `${crmName} · ${crmSeats || 0} seats` : 'Not included' },
       { label: 'Admin login', value: adminEmail || '—' },
-      { label: 'Onboarding fee', value: formatNaira(onboardingFee) },
-    ],
-    [
-      companyName,
-      rcNumber,
-      industry,
-      contactEmail,
-      eng,
-      scBand,
-      crmOn,
-      crmName,
-      crmSeats,
-      adminEmail,
-      onboardingFee,
-    ],
-  );
+      { label: 'Onboarding fee', value: formatNaira(billing.onboardingFee) },
+      {
+        label: 'Fee received',
+        value: feeReceived ? formatNaira(parseInt(feeReceived.replace(/\D/g, ''), 10) || 0) : '—',
+      },
+    ];
+    if (billing.sku && !billing.sku.negotiated) {
+      lines.push({
+        label: `SKU licence (${billing.sku.band})`,
+        value: formatNaira(billing.sku.total),
+      });
+    } else if (billing.sku?.negotiated) {
+      lines.push({ label: 'SKU licence', value: 'Negotiated (contact Sartor)' });
+    }
+    if (billing.crm) {
+      if (crmCycle === 'annual') {
+        lines.push({
+          label: 'CRM annual (list)',
+          value: formatNaira(billing.crm.yearlyList ?? billing.crm.monthly * 12),
+        });
+        lines.push({
+          label: 'CRM annual discount (20%)',
+          value: `−${formatNaira(billing.crm.savings ?? 0)}`,
+        });
+        lines.push({
+          label: 'CRM due',
+          value: formatNaira(billing.crm.total),
+        });
+      } else {
+        lines.push({
+          label: 'CRM (monthly)',
+          value: formatNaira(billing.crm.total),
+        });
+      }
+    }
+    lines.push({ label: 'Total due at activation', value: formatNaira(billing.grandTotal) });
+    return lines;
+  }, [
+    companyName,
+    rcNumber,
+    industry,
+    contactEmail,
+    eng,
+    scBand,
+    crmOn,
+    crmName,
+    crmSeats,
+    adminEmail,
+    billing,
+    crmCycle,
+    feeReceived,
+  ]);
 
   const finish = async () => {
     if (!validateStep(0) || !validateStep(1) || !validateStep(2)) return;
@@ -179,6 +256,8 @@ export function OnboardWizard() {
         engagement: eng,
         crmEnabled: crmOn,
         crmTier: crmOn ? crmName : undefined,
+        crmRate: crmOn ? crmRate : undefined,
+        crmCycle: crmOn ? crmCycle : undefined,
         crmSeats: crmOn && crmSeats ? parseInt(crmSeats, 10) : undefined,
         skuCount: eng === 'full' && skuCount > 0 ? skuCount : undefined,
       });
@@ -370,6 +449,20 @@ export function OnboardWizard() {
               {skuBand()}
             </FormGroup>
           )}
+          <FormGroup label="Fee Received (₦) *">
+            <input
+              type="number"
+              className="inp"
+              placeholder="Amount received"
+              value={feeReceived}
+              onChange={(e) => setFeeReceived(e.target.value)}
+              min={0}
+            />
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
+              Total due at activation: <strong>{formatNaira(billing.grandTotal)}</strong>
+              {eng === 'pilot' ? ' · Pilot fee credited on full deployment within 90 days.' : ''}
+            </div>
+          </FormGroup>
         </>
       )}
 
@@ -416,8 +509,58 @@ export function OnboardWizard() {
               <strong>{row.value}</strong>
             </div>
           ))}
-          <div className="warn-b" style={{ marginTop: 12 }}>
-            ⚠ Confirm fee receipt before activating. Invoice for {formatNaira(onboardingFee)} will be created.
+          <div
+            style={{
+              marginTop: 12,
+              padding: '10px 12px',
+              background: 'var(--bb)',
+              borderRadius: 7,
+              fontSize: 12,
+              color: 'var(--bt)',
+            }}
+          >
+            <strong>Invoices to be created</strong>
+            <div className="srow" style={{ marginTop: 6 }}>
+              <span>Onboarding fee</span>
+              <span>{formatNaira(billing.onboardingFee)}</span>
+            </div>
+            {billing.sku && !billing.sku.negotiated && (
+              <div className="srow">
+                <span>SKU licence</span>
+                <span>{formatNaira(billing.sku.total)}</span>
+              </div>
+            )}
+            {billing.crm && (
+              <div className="srow">
+                <span>CRM {crmCycle === 'annual' ? '(annual, 20% off)' : '(monthly)'}</span>
+                <span>{formatNaira(billing.crm.total)}</span>
+              </div>
+            )}
+            <div className="srow" style={{ fontWeight: 700, borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
+              <span>Total</span>
+              <span>{formatNaira(billing.grandTotal)}</span>
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <FormGroup label="Confirmation *">
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={feeConfirm}
+                  onChange={(e) => setFeeConfirm(e.target.checked)}
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  I confirm payment of <strong>{formatNaira(billing.grandTotal)}</strong> has been received.
+                  {crmOn && crmCycle === 'annual' && (
+                    <>
+                      {' '}
+                      CRM annual billing includes a <strong>20% discount</strong> off the 12‑month list price.
+                    </>
+                  )}
+                </span>
+              </label>
+            </FormGroup>
           </div>
         </>
       )}

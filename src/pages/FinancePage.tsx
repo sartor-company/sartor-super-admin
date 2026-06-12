@@ -115,9 +115,10 @@ export function FinancePage() {
     const seats = Number(crmSeats);
     if (!rate || !seats) return '';
     const monthly = rate * seats;
-    const total = crmCycle === 'annual' ? monthly * 12 * 0.8 : monthly;
+    const yearlyList = monthly * 12;
+    const total = crmCycle === 'annual' ? Math.round(yearlyList * 0.8) : monthly;
     return crmCycle === 'annual'
-      ? `Annual: ${seats} × ${formatNaira(rate)} × 12 × 80% = ${formatNaira(total)}`
+      ? `Annual: ${formatNaira(yearlyList)} list − 20% (${formatNaira(yearlyList - total)}) = ${formatNaira(total)}`
       : `Monthly: ${seats} × ${formatNaira(rate)} = ${formatNaira(monthly)}/month`;
   }, [crmTierRate, crmSeats, crmCycle]);
 
@@ -153,7 +154,7 @@ export function FinancePage() {
       if (createInvoice && seats > 0) {
         const rate = Number(crmTierRate);
         const amount =
-          crmCycle === 'annual' ? rate * seats * 12 * 0.8 : rate * seats;
+          crmCycle === 'annual' ? Math.round(rate * seats * 12 * 0.8) : rate * seats;
         await platformApi.createInvoice({
           adminId: client._id,
           clientName: client.name,
