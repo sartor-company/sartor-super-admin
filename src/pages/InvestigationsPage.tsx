@@ -36,7 +36,24 @@ export function InvestigationsPage() {
         subtitle="Counterfeit & batch mismatch cases · P1/P2/P3 severity"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Investigations Report')}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                exportReport(showToast, 'investigations', {
+                  headers: ['ID', 'Client', 'Batch', 'Severity', 'Status', 'Assigned', 'Opened'],
+                  rows: filtered.map((r) => [
+                    r.id,
+                    r.client,
+                    r.batch,
+                    r.severity,
+                    r.status,
+                    r.assigned,
+                    r.opened,
+                  ]),
+                })
+              }
+            >
               ↓ Export
             </Button>
             <Button variant="danger" size="sm" onClick={() => openModal('new-investigation')}>
@@ -66,7 +83,7 @@ export function InvestigationsPage() {
             { value: '', label: 'All Statuses' },
             { value: 'Open', label: 'Open' },
             { value: 'In Progress', label: 'In Progress' },
-            { value: 'Resolved', label: 'Resolved' },
+            { value: 'Closed', label: 'Closed' },
           ]}
         />
       </FilterBar>

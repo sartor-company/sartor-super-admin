@@ -5,57 +5,101 @@ import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { KCard, KCardGrid } from '../components/ui/KCard';
 import { MonoCell, PageHeader } from '../components/patterns';
+import { useApp } from '../context/AppContext';
 import { usePlatform } from '../context/PlatformContext';
-import type { SupportTicket } from '../data/supportTickets';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
 import { exportReport } from '../utils/exportReport';
+import { platformApi } from '../api/platform';
+
+type ApiTicket = {
+  _id?: string;
+  ticketId?: string;
+  id?: string;
+  clientName?: string;
+  client?: string;
+  subject?: string;
+  type?: string;
+  description?: string;
+  desc?: string;
+  priority?: string;
+  priorityLabel?: string;
+  priorityVariant?: 'br' | 'ba';
+  assignedName?: string;
+  assigned?: string;
+  assignedTo?: string;
+  status?: string;
+  statusVariant?: 'ba' | 'br';
+  age?: string;
+  ageColor?: string;
+  action?: string;
+  admin?: string;
+};
 
 export function SupportPage() {
   const navigate = useNavigate();
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
-  const { tickets } = usePlatform();
+  const { openTicketAssign, openTicketEscalate, openTicketView } = useApp();
+  const { tickets, investigations, refresh } = usePlatform();
   const [query, setQuery] = useState('');
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
-  const mapped = useMemo(
-    (): SupportTicket[] =>
-      tickets.map((t) => {
-        const row = t as {
-          ticketId?: string;
-          _id?: string;
-          clientName?: string;
-          subject?: string;
-          description?: string;
-          priority?: string;
-          assignedName?: string;
-          status?: string;
-          assignedTo?: string;
-        };
-        return {
-          id: String(row.ticketId || row._id),
-          client: String(row.clientName || '—'),
-          type: String(row.subject || 'Support'),
-          typeVariant: 'bb',
-          desc: String(row.description || row.subject || ''),
-          priority: row.priority === 'P1' ? 'Critical' : 'Normal',
-          priorityVariant: row.priority === 'P1' ? 'br' : 'ba',
-          assigned: String(row.assignedName || 'Unassigned'),
-          age: '—',
-          status: String(row.status || 'Open'),
-          statusVariant: 'ba',
-          action: row.assignedTo ? 'resolve' : 'assign',
-        };
-      }),
-    [tickets],
+  const rows = tickets as ApiTicket[];
+
+  const ticketStats = useMemo(() => {
+    const open = rows.filter((t) => ['Open', 'In Progress'].includes(String(t.status || '')));
+    const p1 = open.filter((t) => t.priority === 'P1').length;
+    return { open: open.length, p1 };
+  }, [rows]);
+
+  const openInvestigations = useMemo(
+    () => investigations.filter((i) => i.status !== 'Closed').length,
+    [investigations],
   );
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
-    return mapped.filter((t) => !q || `${t.id} ${t.client} ${t.desc}`.toLowerCase().includes(q));
-  }, [query, mapped]);
+    return rows.filter((t) => {
+      const id = String(t.ticketId || t.id || t._id || '');
+      const client = String(t.clientName || t.client || '');
+      const desc = String(t.description || t.desc || '');
+      return !q || `${id} ${client} ${desc}`.toLowerCase().includes(q);
+    });
+  }, [query, rows]);
+
+  const openTicket = (t: ApiTicket) => {
+    const id = String(t.ticketId || t.id || '');
+    openTicketView({
+      id,
+      _id: t._id ? String(t._id) : id,
+      client: String(t.clientName || t.client || '—'),
+      subject: t.subject || t.type,
+      description: String(t.description || t.desc || ''),
+      priority: t.priority,
+      status: t.status,
+      assigned: t.assignedName || t.assigned,
+      assignedTo: t.assignedTo ? String(t.assignedTo) : undefined,
+      escalated: (t as { escalated?: boolean }).escalated,
+    });
+    openModal('ticket-detail');
+  };
+
+  const resolveTicket = async (t: ApiTicket) => {
+    const patchId = t._id ? String(t._id) : String(t.ticketId || t.id);
+    setResolvingId(patchId);
+    try {
+      await platformApi.patchTicket(patchId, { status: 'Resolved' });
+      await refresh();
+      showToast('Ticket resolved.', 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not resolve ticket.', 'error');
+    } finally {
+      setResolvingId(null);
+    }
+  };
 
   return (
     <>
@@ -75,11 +119,11 @@ export function SupportPage() {
       />
 
       <KCardGrid columns={4}>
-        <KCard label="Open Tickets" value="5" trend="2 escalated" trendType="dn" accent />
-        <KCard label="Resolved Today" value="3" />
-        <KCard label="Avg Resolution Time" value="4.2h" trend="↑ vs 5.8h" trendType="up" />
+        <KCard label="Open Tickets" value={String(ticketStats.open)} trend={`${ticketStats.p1} P1`} trendType="dn" accent />
+        <KCard label="Total Tickets" value={String(rows.length)} trend="All time" trendType="neu" />
+        <KCard label="Resolved / Closed" value={String(rows.length - ticketStats.open)} trend="Live" trendType="up" />
         <div style={{ cursor: 'pointer' }} onClick={() => navigate('/investigations')} role="presentation">
-          <KCard label="P1 Investigations" value="4" trend="Click to review" trendType="dn" />
+          <KCard label="Open Investigations" value={String(openInvestigations)} trend="Click to review" trendType="dn" />
         </div>
       </KCardGrid>
 
@@ -114,60 +158,107 @@ export function SupportPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t) => (
-              <tr key={t.id}>
-                <MonoCell>{t.id}</MonoCell>
-                <td>{t.client}</td>
-                <td>
-                  <Badge variant={t.typeVariant}>{t.type}</Badge>
-                </td>
-                <td style={{ fontSize: 12 }}>{t.desc}</td>
-                <td>
-                  <Badge variant={t.priorityVariant}>{t.priority}</Badge>
-                </td>
-                <td style={t.assigned === 'Unassigned' ? { color: 'var(--rt)' } : undefined}>{t.assigned}</td>
-                <td style={{ fontWeight: 600, color: t.ageColor }}>{t.age}</td>
-                <td>
-                  <Badge variant={t.statusVariant}>{t.status}</Badge>
-                </td>
-                <td>
-                  {t.action === 'escalate' && (
-                    <Button variant="danger" size="sm" onClick={() => openModal('escalate')}>
-                      Escalate
-                    </Button>
-                  )}
-                  {t.action === 'assign' && (
-                    <Button variant="primary" size="sm" onClick={() => openModal('assign')}>
-                      Assign
-                    </Button>
-                  )}
-                  {t.action === 'resolve' && (
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <Button variant="secondary" size="sm" onClick={() => showToast('Ticket viewed.')}>
-                        View
-                      </Button>
-                      <Button variant="success" size="sm" onClick={() => showToast('Ticket resolved.', 'success')}>
-                        Resolve
-                      </Button>
-                    </div>
-                  )}
-                  {t.action === 'followup' && (
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => followUp('FreshNow Consumer', t.followUpMessage ?? '')}
-                      >
-                        Follow Up
-                      </Button>
-                      <Button variant="success" size="sm" onClick={() => showToast('Ticket resolved.', 'success')}>
-                        Resolve
-                      </Button>
-                    </div>
-                  )}
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text3)' }}>
+                  No tickets found.
                 </td>
               </tr>
-            ))}
+            ) : (
+              filtered.map((t) => {
+                const id = String(t.ticketId || t.id || t._id);
+                const patchId = t._id ? String(t._id) : id;
+                const assigned = String(t.assignedName || t.assigned || 'Unassigned');
+                const priority = t.priorityLabel || (t.priority === 'P1' ? 'Critical' : 'Normal');
+                const priorityVariant = t.priority === 'P1' ? 'br' : 'ba';
+                const action = t.action || (t.assignedTo ? 'resolve' : 'assign');
+
+                return (
+                  <tr key={id}>
+                    <MonoCell>{id}</MonoCell>
+                    <td>{t.clientName || t.client}</td>
+                    <td>
+                      <Badge variant="bb">{t.type || t.subject || 'Support'}</Badge>
+                    </td>
+                    <td style={{ fontSize: 12 }}>{t.description || t.desc}</td>
+                    <td>
+                      <Badge variant={priorityVariant}>{priority}</Badge>
+                    </td>
+                    <td style={assigned === 'Unassigned' ? { color: 'var(--rt)' } : undefined}>{assigned}</td>
+                    <td style={{ fontWeight: 600, color: t.ageColor }}>{t.age || '—'}</td>
+                    <td>
+                      <Badge variant={t.statusVariant || 'ba'}>{t.status || 'Open'}</Badge>
+                    </td>
+                    <td>
+                      {action === 'escalate' && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => {
+                            openTicketEscalate(patchId);
+                            openModal('escalate');
+                          }}
+                        >
+                          Escalate
+                        </Button>
+                      )}
+                      {action === 'assign' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            openTicketAssign(patchId);
+                            openModal('assign');
+                          }}
+                        >
+                          Assign
+                        </Button>
+                      )}
+                      {action === 'resolve' && (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <Button variant="secondary" size="sm" onClick={() => openTicket(t)}>
+                            View
+                          </Button>
+                          <Button
+                            variant="success"
+                            size="sm"
+                            disabled={resolvingId === patchId}
+                            onClick={() => resolveTicket(t)}
+                          >
+                            {resolvingId === patchId ? '…' : 'Resolve'}
+                          </Button>
+                        </div>
+                      )}
+                      {action === 'followup' && (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() =>
+                              followUp(
+                                String(t.clientName || t.client),
+                                String(t.description || t.desc || ''),
+                                t.admin ? String(t.admin) : undefined,
+                              )
+                            }
+                          >
+                            Follow Up
+                          </Button>
+                          <Button
+                            variant="success"
+                            size="sm"
+                            disabled={resolvingId === patchId}
+                            onClick={() => resolveTicket(t)}
+                          >
+                            Resolve
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </Card>

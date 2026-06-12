@@ -7,16 +7,21 @@ import { useApp } from '../../context/AppContext';
 import { useModal } from '../../context/ModalContext';
 
 export function InvestigationsTable({ rows = INVESTIGATIONS }: { rows?: InvestigationRow[] }) {
-  const { openInvestigation } = useApp();
+  const { openInvestigation, openInvestigationAssign } = useApp();
   const { openModal } = useModal();
 
   const openRow = (row: InvestigationRow) => {
     openInvestigation({
       id: row.id,
+      _id: row._id,
       client: row.client,
       batch: row.batch,
       severity: row.severity,
       desc: row.desc,
+      status: row.status,
+      assigned: row.assigned,
+      assignedTo: row.assignedTo,
+      assignedName: row.assignedName,
     });
     openModal('investigation');
   };
@@ -61,15 +66,18 @@ export function InvestigationsTable({ rows = INVESTIGATIONS }: { rows?: Investig
                 </td>
                 <td onClick={(e) => e.stopPropagation()}>
                   {row.action === 'assign' ? (
-                    <Button variant="danger" size="sm" onClick={() => openModal('assign')}>
-                      Assign
-                    </Button>
-                  ) : (
                     <Button
                       variant="danger"
                       size="sm"
-                      onClick={() => openRow(row)}
+                      onClick={() => {
+                        openInvestigationAssign(row._id || row.id);
+                        openModal('assign');
+                      }}
                     >
+                      Assign
+                    </Button>
+                  ) : (
+                    <Button variant="danger" size="sm" onClick={() => openRow(row)}>
                       Review
                     </Button>
                   )}

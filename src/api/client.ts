@@ -17,6 +17,10 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (res) => res,
   (err) => {
+    const msg = err.response?.data?.message;
+    if (msg) {
+      err.message = msg;
+    }
     if (err.response?.status === 401) {
       useAuthStore.getState().logout();
       if (!window.location.pathname.startsWith('/login')) {

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { platformApi } from '../api/platform';
 import { FormRow2 } from '../components/patterns/FormGrid';
-import { InvestigationBanner } from '../components/patterns/InvestigationBanner';
 import { Button } from '../components/ui/Button';
 import { FormGroup } from '../components/ui/FormGroup';
 import { Modal, ModalFooter } from '../components/ui/Modal';
@@ -10,54 +9,51 @@ import { useModal } from '../context/ModalContext';
 import { usePlatform } from '../context/PlatformContext';
 import { useToast } from '../context/ToastContext';
 
-const STATUS_OPTIONS = ['Open', 'In Progress', 'Closed'] as const;
+const STATUS_OPTIONS = ['Open', 'In Progress', 'Resolved', 'Closed'] as const;
 
-export function InvestigationModal() {
+export function TicketDetailModal() {
   const { isOpen, closeModal } = useModal();
   const { showToast } = useToast();
-  const { investigation } = useApp();
+  const { activeTicket } = useApp();
   const { staff, refresh } = usePlatform();
 
   const [status, setStatus] = useState('Open');
   const [assignedTo, setAssignedTo] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const open = isOpen('investigation');
-  const close = () => closeModal('investigation');
+  const open = isOpen('ticket-detail');
+  const close = () => closeModal('ticket-detail');
+  const patchId = activeTicket?._id || activeTicket?.id;
 
   useEffect(() => {
-    if (!open || !investigation) return;
-    setStatus(investigation.status === 'Closed' ? 'Closed' : investigation.status || 'Open');
-    setAssignedTo(investigation.assignedTo || '');
-  }, [open, investigation]);
-
-  const patchId = investigation?._id || investigation?.id;
+    if (!open || !activeTicket) return;
+    setStatus(activeTicket.status || 'Open');
+    setAssignedTo(activeTicket.assignedTo || '');
+  }, [open, activeTicket]);
 
   const save = async (nextStatus?: string) => {
     if (!patchId) {
-      showToast('Investigation id missing.', 'error');
+      showToast('Ticket id missing.', 'error');
       return;
     }
-
     const assignee = staff.find((s) => s._id === assignedTo);
-    const body: Record<string, unknown> = {
-      status: nextStatus || status,
-      assignedTo: assignee?._id || null,
-      assignedName: assignee?.fullName || null,
-    };
-
     setSaving(true);
     try {
-      await platformApi.patchInvestigation(patchId, body);
+      await platformApi.patchTicket(patchId, {
+        status: nextStatus || status,
+        assignedTo: assignee?._id || null,
+        assignedName: assignee?.fullName || null,
+      });
       await refresh();
       close();
-      const label =
-        nextStatus === 'Closed'
-          ? 'Investigation marked as closed.'
-          : 'Investigation updated.';
-      showToast(label, nextStatus === 'Closed' ? 'success' : undefined);
+      showToast(
+        nextStatus === 'Resolved' || nextStatus === 'Closed'
+          ? 'Ticket resolved.'
+          : 'Ticket updated.',
+        'success',
+      );
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Could not update investigation.', 'error');
+      showToast(err instanceof Error ? err.message : 'Could not update ticket.', 'error');
     } finally {
       setSaving(false);
     }
@@ -67,17 +63,14 @@ export function InvestigationModal() {
     <Modal
       open={open}
       onClose={close}
-      title={investigation?.id ?? 'Investigation'}
-      subtitle={
-        investigation ? `${investigation.client} · ${investigation.batch} · ${investigation.severity}` : undefined
-      }
-      width={620}
+      title={activeTicket?.id ?? 'Support Ticket'}
+      subtitle={activeTicket ? `${activeTicket.client} · ${activeTicket.priority || 'P2'}` : undefined}
+      width={580}
     >
-      {investigation && <InvestigationBanner investigation={investigation} />}
       <div className="fg">
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Description</div>
         <div style={{ fontSize: 13, color: 'var(--text2)', padding: 10, background: 'var(--bg)', borderRadius: 7 }}>
-          {investigation?.desc}
+          {activeTicket?.description}
         </div>
       </div>
       <FormRow2>
@@ -90,7 +83,7 @@ export function InvestigationModal() {
           >
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
-                {opt === 'Closed' ? 'Closed / Resolved' : opt}
+                {opt}
               </option>
             ))}
           </select>
@@ -116,9 +109,9 @@ export function InvestigationModal() {
           Close
         </Button>
         <Button variant="secondary" onClick={() => save()} disabled={saving}>
-          {saving ? 'Saving…' : 'Save & Keep Open'}
+          {saving ? 'Saving…' : 'Save'}
         </Button>
-        <Button variant="success" onClick={() => save('Closed')} disabled={saving}>
+        <Button variant="success" onClick={() => save('Resolved')} disabled={saving}>
           Mark Resolved
         </Button>
       </ModalFooter>

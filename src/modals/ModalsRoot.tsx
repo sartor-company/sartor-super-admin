@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { platformApi } from '../api/platform';
 import { FormRow2 } from '../components/patterns/FormGrid';
 import { InfoBanner, WarnBanner } from '../components/patterns/Banner';
 import { Button } from '../components/ui/Button';
@@ -6,8 +7,8 @@ import { FormGroup } from '../components/ui/FormGroup';
 import { Modal, ModalFooter } from '../components/ui/Modal';
 import { useApp } from '../context/AppContext';
 import { useModal } from '../context/ModalContext';
+import { usePlatform } from '../context/PlatformContext';
 import { useToast } from '../context/ToastContext';
-import { CLIENTS } from '../data/clients';
 import { calcConversionPreview } from '../utils/pricing';
 import { formatNaira } from '../utils/format';
 import { FollowUpModal } from './FollowUpModal';
@@ -16,21 +17,106 @@ import { InvoiceModal } from './InvoiceModal';
 import { NewInvestigationModal } from './NewInvestigationModal';
 import { OnboardWizard } from './OnboardWizard';
 import { StaffModal } from './StaffModal';
+import { TeamMemberModal } from './TeamMemberModal';
+import { TicketDetailModal } from './TicketDetailModal';
+import { TicketModal } from './TicketModal';
+
+const CRM_TIERS = [
+  'Sales Navigator',
+  'Sales Navigator Plus',
+  'CRM 360',
+] as const;
 
 export function ModalsRoot() {
   const { isOpen, closeModal } = useModal();
   const { showToast } = useToast();
-  const { teamMemberEditName, selectedClient, submitClientNote } = useApp();
+  const {
+    selectedClient,
+    submitClientNote,
+    onboardingAssignId,
+    investigationAssignId,
+    ticketAssignId,
+    ticketEscalateId,
+    doraLabel,
+    openOnboardingAssign,
+    openInvestigationAssign,
+    openTicketAssign,
+    openTicketEscalate,
+    openDoraLabel,
+    notifyClientReload,
+  } = useApp();
+  const { staff, refresh } = usePlatform();
+
+  const [editName, setEditName] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   const [crmTierSel, setCrmTierSel] = useState(1);
   const [uploadConsent, setUploadConsent] = useState(false);
   const [note, setNote] = useState('');
-  const [convSkus, setConvSkus] = useState('');
+  const [convSkus, setConvSkus] = useState('10');
   const [seats, setSeats] = useState(12);
+  const [seatReason, setSeatReason] = useState('');
+  const [domainTarget, setDomainTarget] = useState('');
+  const [escalateReason, setEscalateReason] = useState('');
+  const [resubmitReason, setResubmitReason] = useState('');
+  const [resubmitGuidance, setResubmitGuidance] = useState('');
+  const [lifecycleSaving, setLifecycleSaving] = useState(false);
+  const [uploadFront, setUploadFront] = useState<File | null>(null);
+  const [uploadBack, setUploadBack] = useState<File | null>(null);
+  const [assignStaffId, setAssignStaffId] = useState('');
+  const [assignSaving, setAssignSaving] = useState(false);
+
+  const assignOpen = isOpen('assign');
+  const editOpen = isOpen('edit-client');
+  const seatOpen = isOpen('seatadj');
+  const tierOpen = isOpen('crm-tier');
+  const convertOpen = isOpen('convert');
+  const domainOpen = isOpen('domain-upgrade');
+  const escalateOpen = isOpen('escalate');
+  const reviewOpen = isOpen('model-review');
+
+  useEffect(() => {
+    if (editOpen && selectedClient) setEditName(selectedClient.name);
+  }, [editOpen, selectedClient]);
+  useEffect(() => {
+    if (seatOpen && selectedClient) setSeats(selectedClient.crmSeats || 12);
+  }, [seatOpen, selectedClient]);
+  useEffect(() => {
+    if (convertOpen) setConvSkus('10');
+  }, [convertOpen]);
+  useEffect(() => {
+    if (domainOpen && selectedClient) {
+      setDomainTarget(`verify-${selectedClient.code.toLowerCase()}.sartor.ng`);
+    }
+  }, [domainOpen, selectedClient]);
+  useEffect(() => {
+    if (!assignOpen) {
+      setAssignStaffId('');
+      openOnboardingAssign(null);
+      openInvestigationAssign(null);
+      openTicketAssign(null);
+    }
+  }, [assignOpen, openOnboardingAssign, openInvestigationAssign, openTicketAssign]);
+  useEffect(() => {
+    if (!escalateOpen) {
+      setEscalateReason('');
+      openTicketEscalate(null);
+    }
+  }, [escalateOpen, openTicketEscalate]);
+  useEffect(() => {
+    if (!reviewOpen) {
+      setResubmitReason('');
+      setResubmitGuidance('');
+    }
+  }, [reviewOpen]);
 
   const uploadOpen = isOpen('upload-images');
   useEffect(() => {
-    if (!uploadOpen) setUploadConsent(false);
+    if (!uploadOpen) {
+      setUploadConsent(false);
+      setUploadFront(null);
+      setUploadBack(null);
+    }
   }, [uploadOpen]);
 
   const seatPreview = () => {
@@ -54,55 +140,7 @@ export function ModalsRoot() {
       <FollowUpModal />
       <InvestigationModal />
       <NewInvestigationModal />
-
-      <Modal
-        open={isOpen('teammember')}
-        onClose={() => closeModal('teammember')}
-        title={teamMemberEditName ? `Edit Member — ${teamMemberEditName}` : 'Add Team Member'}
-      >
-        <FormRow2>
-          <FormGroup label="First Name *">
-            <input className="inp" placeholder="First name" />
-          </FormGroup>
-          <FormGroup label="Last Name *">
-            <input className="inp" placeholder="Last name" />
-          </FormGroup>
-        </FormRow2>
-        <FormGroup label="Email (login) *">
-          <input className="inp" type="email" placeholder="name@clientdomain.com" />
-        </FormGroup>
-        <FormRow2>
-          <FormGroup label="Role *">
-            <select className="inp" defaultValue="Account Owner">
-              <option>Account Owner</option>
-              <option>Batch Admin</option>
-              <option>Brand Manager</option>
-              <option>CRM Admin</option>
-            </select>
-          </FormGroup>
-          <FormGroup label="Product Access *">
-            <select className="inp" defaultValue="SC + CRM">
-              <option>SartorChain (SC)</option>
-              <option>Sartor CRM</option>
-              <option>SC + CRM</option>
-            </select>
-          </FormGroup>
-        </FormRow2>
-        <ModalFooter>
-          <Button variant="secondary" onClick={() => closeModal('teammember')}>
-            Cancel
-          </Button>
-          <Button
-            className="bacc"
-            onClick={() => {
-              closeModal('teammember');
-              showToast('Team member added. Welcome email sent.', 'success');
-            }}
-          >
-            Add Member
-          </Button>
-        </ModalFooter>
-      </Modal>
+      <TeamMemberModal />
 
       <Modal open={isOpen('addnote')} onClose={() => closeModal('addnote')} title="Add Internal Note">
         <FormGroup label="Note">
@@ -151,7 +189,7 @@ export function ModalsRoot() {
             marginBottom: 14,
           }}
         >
-          Current: <strong>12 active seats</strong> · ₦25,000/seat/month · All CRM tiers billed per seat per month.
+          Current: <strong>{selectedClient?.crmSeats || 12} active seats</strong> · ₦25,000/seat/month · All CRM tiers billed per seat per month.
         </div>
         <FormGroup label="New Seat Count *">
           <input type="number" className="inp" value={seats} min={1} onChange={(e) => setSeats(parseInt(e.target.value, 10) || 0)} />
@@ -166,25 +204,48 @@ export function ModalsRoot() {
           </select>
         </FormGroup>
         <FormGroup label="Reason (internal)">
-          <input className="inp" placeholder="e.g. Client added 3 new sales reps" />
+          <input
+            className="inp"
+            placeholder="e.g. Client added 3 new sales reps"
+            value={seatReason}
+            onChange={(e) => setSeatReason(e.target.value)}
+          />
         </FormGroup>
         <ModalFooter>
-          <Button variant="secondary" onClick={() => closeModal('seatadj')}>
+          <Button variant="secondary" onClick={() => closeModal('seatadj')} disabled={lifecycleSaving}>
             Cancel
           </Button>
           <Button
             className="bacc"
-            onClick={() => {
-              closeModal('seatadj');
-              showToast('Seat count updated. Client notified.', 'success');
+            disabled={lifecycleSaving || !selectedClient?._id}
+            onClick={async () => {
+              if (!selectedClient?._id) return;
+              setLifecycleSaving(true);
+              try {
+                await platformApi.patchClient(selectedClient._id, { crmSeats: seats });
+                if (seatReason.trim()) {
+                  await platformApi.addNote(
+                    selectedClient._id,
+                    `CRM seats adjusted to ${seats}. ${seatReason.trim()}`,
+                  );
+                }
+                await refresh();
+                notifyClientReload();
+                closeModal('seatadj');
+                showToast('Seat count updated.', 'success');
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : 'Could not update seats.', 'error');
+              } finally {
+                setLifecycleSaving(false);
+              }
             }}
           >
-            Confirm Adjustment
+            {lifecycleSaving ? 'Saving…' : 'Confirm Adjustment'}
           </Button>
         </ModalFooter>
       </Modal>
 
-      <Modal open={isOpen('crm-tier')} onClose={() => closeModal('crm-tier')} title="Change CRM Tier" width={560}>
+      <Modal open={tierOpen} onClose={() => closeModal('crm-tier')} title="Change CRM Tier" width={560}>
         <InfoBanner>ℹ Tier change takes effect next billing cycle unless specified.</InfoBanner>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
           {[
@@ -212,68 +273,126 @@ export function ModalsRoot() {
           </Button>
           <Button
             className="bacc"
-            onClick={() => {
-              closeModal('crm-tier');
-              showToast('CRM tier updated. Invoice will be generated at next billing cycle.', 'success');
+            disabled={lifecycleSaving || !selectedClient?._id}
+            onClick={async () => {
+              if (!selectedClient?._id) return;
+              setLifecycleSaving(true);
+              try {
+                await platformApi.patchClient(selectedClient._id, {
+                  crmTier: CRM_TIERS[crmTierSel],
+                  crmEnabled: true,
+                });
+                await platformApi.addNote(
+                  selectedClient._id,
+                  `CRM tier changed to ${CRM_TIERS[crmTierSel]}.`,
+                );
+                await refresh();
+                notifyClientReload();
+                closeModal('crm-tier');
+                showToast('CRM tier updated.', 'success');
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : 'Could not update tier.', 'error');
+              } finally {
+                setLifecycleSaving(false);
+              }
             }}
           >
-            Confirm Tier Change
+            {lifecycleSaving ? 'Saving…' : 'Confirm Tier Change'}
           </Button>
         </ModalFooter>
       </Modal>
 
-      <Modal open={isOpen('ticket')} onClose={() => closeModal('ticket')} title="Log Support Ticket">
-        <FormGroup label="Client *">
-          <select className="inp">
-            {CLIENTS.map((c) => (
-              <option key={c.code}>{c.name}</option>
-            ))}
-          </select>
-        </FormGroup>
-        <FormGroup label="Description *">
-          <textarea className="inp" rows={4} style={{ resize: 'vertical' }} />
-        </FormGroup>
-        <ModalFooter>
-          <Button variant="secondary" onClick={() => closeModal('ticket')}>
-            Cancel
-          </Button>
-          <Button className="bacc" onClick={() => { closeModal('ticket'); showToast('Ticket TKT-2026-097 created.', 'success'); }}>
-            Create Ticket
-          </Button>
-        </ModalFooter>
-      </Modal>
+      <TicketModal />
+      <TicketDetailModal />
 
-      <Modal open={isOpen('escalate')} onClose={() => closeModal('escalate')} title="Escalate Ticket">
+      <Modal open={escalateOpen} onClose={() => closeModal('escalate')} title="Escalate Ticket">
         <WarnBanner>⚠ Escalating notifies the CEO and Operations Manager immediately.</WarnBanner>
         <FormGroup label="Escalation Reason *">
-          <textarea className="inp" rows={3} style={{ resize: 'vertical' }} />
+          <textarea
+            className="inp"
+            rows={3}
+            style={{ resize: 'vertical' }}
+            value={escalateReason}
+            onChange={(e) => setEscalateReason(e.target.value)}
+          />
         </FormGroup>
         <ModalFooter>
-          <Button variant="secondary" onClick={() => closeModal('escalate')}>
+          <Button variant="secondary" onClick={() => closeModal('escalate')} disabled={lifecycleSaving}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={() => { closeModal('escalate'); showToast('Ticket escalated. CEO & Ops Manager notified.', 'warn'); }}>
-            Escalate Now
+          <Button
+            variant="danger"
+            disabled={lifecycleSaving || !ticketEscalateId || !escalateReason.trim()}
+            onClick={async () => {
+              if (!ticketEscalateId) return;
+              setLifecycleSaving(true);
+              try {
+                await platformApi.patchTicket(ticketEscalateId, {
+                  escalated: true,
+                  escalationReason: escalateReason.trim(),
+                  status: 'In Progress',
+                });
+                await refresh();
+                closeModal('escalate');
+                showToast('Ticket escalated. Leadership notified.', 'warn');
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : 'Could not escalate.', 'error');
+              } finally {
+                setLifecycleSaving(false);
+              }
+            }}
+          >
+            {lifecycleSaving ? 'Escalating…' : 'Escalate Now'}
           </Button>
         </ModalFooter>
       </Modal>
 
-      <Modal open={isOpen('domain-upgrade')} onClose={() => closeModal('domain-upgrade')} title="Domain Upgrade">
+      <Modal open={domainOpen} onClose={() => closeModal('domain-upgrade')} title="Domain Upgrade">
         <WarnBanner>⚠ Requires engineering provisioning.</WarnBanner>
         <FormGroup label="Target Domain">
-          <input className="inp" placeholder="e.g. verify-shc.sartor.ng" />
+          <input
+            className="inp"
+            placeholder="e.g. verify-shc.sartor.ng"
+            value={domainTarget}
+            onChange={(e) => setDomainTarget(e.target.value)}
+          />
         </FormGroup>
         <ModalFooter>
-          <Button variant="secondary" onClick={() => closeModal('domain-upgrade')}>
+          <Button variant="secondary" onClick={() => closeModal('domain-upgrade')} disabled={lifecycleSaving}>
             Cancel
           </Button>
-          <Button className="bacc" onClick={() => { closeModal('domain-upgrade'); showToast('Domain upgrade request submitted.', 'success'); }}>
-            Submit Request
+          <Button
+            className="bacc"
+            disabled={lifecycleSaving || !selectedClient?._id || !domainTarget.trim()}
+            onClick={async () => {
+              if (!selectedClient?._id) return;
+              setLifecycleSaving(true);
+              try {
+                await platformApi.patchClient(selectedClient._id, {
+                  verifyDomain: domainTarget.trim(),
+                  domainTier: 'growth',
+                });
+                await platformApi.addNote(
+                  selectedClient._id,
+                  `Domain upgrade requested: ${domainTarget.trim()}`,
+                );
+                await refresh();
+                notifyClientReload();
+                closeModal('domain-upgrade');
+                showToast('Domain upgrade request submitted.', 'success');
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : 'Could not submit request.', 'error');
+              } finally {
+                setLifecycleSaving(false);
+              }
+            }}
+          >
+            {lifecycleSaving ? 'Submitting…' : 'Submit Request'}
           </Button>
         </ModalFooter>
       </Modal>
 
-      <Modal open={isOpen('convert')} onClose={() => closeModal('convert')} title="Convert Pilot to Full Deployment">
+      <Modal open={convertOpen} onClose={() => closeModal('convert')} title="Convert Pilot to Full Deployment">
         <div style={{ padding: '9px 11px', background: 'var(--gb)', borderRadius: 7, fontSize: 12, color: 'var(--gt)', marginBottom: 14 }}>
           ✓ Pilot credit ₦3,500,000 applied. Effective onboarding fee: <strong>₦1,000,000</strong>.
         </div>
@@ -285,16 +404,43 @@ export function ModalsRoot() {
           <Button variant="secondary" onClick={() => closeModal('convert')}>
             Cancel
           </Button>
-          <Button className="bacc" onClick={() => { closeModal('convert'); showToast('Pilot converted to Full Deployment.', 'success'); }}>
-            Confirm Conversion
+          <Button
+            className="bacc"
+            disabled={lifecycleSaving || !selectedClient?._id}
+            onClick={async () => {
+              if (!selectedClient?._id) return;
+              setLifecycleSaving(true);
+              try {
+                await platformApi.convertPilot(selectedClient._id, {
+                  skuCount: parseInt(convSkus, 10) || 1,
+                });
+                await refresh();
+                notifyClientReload();
+                closeModal('convert');
+                showToast('Pilot converted to Full Deployment.', 'success');
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : 'Could not convert pilot.', 'error');
+              } finally {
+                setLifecycleSaving(false);
+              }
+            }}
+          >
+            {lifecycleSaving ? 'Converting…' : 'Confirm Conversion'}
           </Button>
         </ModalFooter>
       </Modal>
 
-      <Modal open={isOpen('model-review')} onClose={() => closeModal('model-review')} title="Request Image Re-Submission">
+      <Modal open={reviewOpen} onClose={() => closeModal('model-review')} title="Request Image Re-Submission">
         <WarnBanner>⚠ Model scored below 70-point threshold. Client will be notified to resubmit reference images.</WarnBanner>
         <FormGroup label="Reason (communicated to client)">
-          <textarea className="inp" rows={3} style={{ resize: 'vertical' }} placeholder="Describe the image quality issue..." />
+          <textarea
+            className="inp"
+            rows={3}
+            style={{ resize: 'vertical' }}
+            placeholder="Describe the image quality issue..."
+            value={resubmitReason}
+            onChange={(e) => setResubmitReason(e.target.value)}
+          />
         </FormGroup>
         <FormGroup label="Guidance for Client">
           <textarea
@@ -302,14 +448,37 @@ export function ModalsRoot() {
             rows={2}
             style={{ resize: 'vertical' }}
             placeholder="e.g. Ensure consistent lighting, cover all label angles..."
+            value={resubmitGuidance}
+            onChange={(e) => setResubmitGuidance(e.target.value)}
           />
         </FormGroup>
         <ModalFooter>
-          <Button variant="secondary" onClick={() => closeModal('model-review')}>
+          <Button variant="secondary" onClick={() => closeModal('model-review')} disabled={lifecycleSaving}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={() => { closeModal('model-review'); showToast('Resubmission request sent to client.', 'warn'); }}>
-            Send Request
+          <Button
+            variant="danger"
+            disabled={lifecycleSaving || !doraLabel?._id || !resubmitReason.trim()}
+            onClick={async () => {
+              if (!doraLabel?._id) return;
+              setLifecycleSaving(true);
+              try {
+                await platformApi.doraResubmit(doraLabel._id, {
+                  reason: resubmitReason.trim(),
+                  guidance: resubmitGuidance.trim(),
+                });
+                await refresh();
+                closeModal('model-review');
+                openDoraLabel(null);
+                showToast('Resubmission request sent to client.', 'warn');
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : 'Could not send request.', 'error');
+              } finally {
+                setLifecycleSaving(false);
+              }
+            }}
+          >
+            {lifecycleSaving ? 'Sending…' : 'Send Request'}
           </Button>
         </ModalFooter>
       </Modal>
@@ -324,75 +493,191 @@ export function ModalsRoot() {
             Client has provided physical samples and authorised Sartor to upload on their behalf.
           </label>
         </FormGroup>
-        <FormGroup label="Images">
-          <input type="file" className="inp" multiple accept="image/*" style={{ padding: 6 }} />
-        </FormGroup>
+        <FormRow2>
+          <FormGroup label="Front image">
+            <input
+              type="file"
+              className="inp"
+              accept="image/jpeg,image/png,image/jpg"
+              style={{ padding: 6 }}
+              onChange={(e) => setUploadFront(e.target.files?.[0] || null)}
+            />
+          </FormGroup>
+          <FormGroup label="Back image (if 2-sided)">
+            <input
+              type="file"
+              className="inp"
+              accept="image/jpeg,image/png,image/jpg"
+              style={{ padding: 6 }}
+              onChange={(e) => setUploadBack(e.target.files?.[0] || null)}
+            />
+          </FormGroup>
+        </FormRow2>
         <ModalFooter>
           <Button variant="secondary" onClick={() => closeModal('upload-images')}>
             Cancel
           </Button>
           <Button
             className="bacc"
-            onClick={() => {
+            disabled={lifecycleSaving}
+            onClick={async () => {
               if (!uploadConsent) {
                 showToast('Confirm client authorisation first.', 'error');
                 return;
               }
-              closeModal('upload-images');
-              showToast('Images uploaded. Training begins within 1 hour.', 'success');
+              if (!doraLabel?._id) {
+                showToast('No DORA label selected.', 'error');
+                return;
+              }
+              if (!uploadFront && !uploadBack) {
+                showToast('Select at least one reference image.', 'error');
+                return;
+              }
+              setLifecycleSaving(true);
+              try {
+                const form = new FormData();
+                if (uploadFront) form.append('front', uploadFront);
+                if (uploadBack) form.append('back', uploadBack);
+                await platformApi.uploadDoraLabel(doraLabel._id, form);
+                await refresh();
+                closeModal('upload-images');
+                openDoraLabel(null);
+                showToast('Images uploaded. Training begins within 1 hour.', 'success');
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : 'Could not upload.', 'error');
+              } finally {
+                setLifecycleSaving(false);
+              }
             }}
           >
-            Upload & Begin Training
+            {lifecycleSaving ? 'Uploading…' : 'Upload & Begin Training'}
           </Button>
         </ModalFooter>
       </Modal>
 
-      <Modal open={isOpen('assign')} onClose={() => closeModal('assign')} title="Assign to Staff Member">
+      <Modal open={assignOpen} onClose={() => closeModal('assign')} title="Assign to Staff Member">
         <FormGroup label="Assign To *">
-          <select className="inp">
-            <option>Amaka Eze (Account Manager)</option>
-            <option>Emeka Nnaji (Ops Manager)</option>
-            <option>Chidi Ogu (Platform Support)</option>
-            <option>Samuel Okon (AI/ML Lead)</option>
-          </select>
-        </FormGroup>
-        <FormGroup label="Priority">
-          <select className="inp">
-            <option>Normal</option>
-            <option>High</option>
-            <option>Urgent</option>
+          <select
+            className="inp"
+            value={assignStaffId}
+            onChange={(e) => setAssignStaffId(e.target.value)}
+          >
+            <option value="">Select staff member...</option>
+            {staff.map((s) => (
+              <option key={s._id} value={s._id}>
+                {s.fullName} ({s.platformRole})
+              </option>
+            ))}
           </select>
         </FormGroup>
         <ModalFooter>
-          <Button variant="secondary" onClick={() => closeModal('assign')}>
+          <Button variant="secondary" onClick={() => closeModal('assign')} disabled={assignSaving}>
             Cancel
           </Button>
-          <Button className="bacc" onClick={() => { closeModal('assign'); showToast('Task assigned. Staff member notified.', 'success'); }}>
-            Assign
+          <Button
+            className="bacc"
+            disabled={assignSaving || !assignStaffId}
+            onClick={async () => {
+              if (!onboardingAssignId && !investigationAssignId && !ticketAssignId) {
+                showToast('No record selected to assign.', 'error');
+                return;
+              }
+              const assignee = staff.find((s) => s._id === assignStaffId);
+              setAssignSaving(true);
+              try {
+                if (ticketAssignId) {
+                  await platformApi.patchTicket(ticketAssignId, {
+                    assignedTo: assignStaffId,
+                    assignedName: assignee?.fullName,
+                    status: 'In Progress',
+                  });
+                  showToast('Ticket assigned.', 'success');
+                } else if (investigationAssignId) {
+                  await platformApi.patchInvestigation(investigationAssignId, {
+                    assignedTo: assignStaffId,
+                    assignedName: assignee?.fullName,
+                    status: 'In Progress',
+                  });
+                  showToast('Investigation assigned.', 'success');
+                } else if (onboardingAssignId) {
+                  await platformApi.patchOnboarding(onboardingAssignId, {
+                    assignedAm: assignStaffId,
+                  });
+                  showToast('Onboarding assigned.', 'success');
+                }
+                await refresh();
+                closeModal('assign');
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : 'Could not assign.', 'error');
+              } finally {
+                setAssignSaving(false);
+              }
+            }}
+          >
+            {assignSaving ? 'Assigning…' : 'Assign'}
           </Button>
         </ModalFooter>
       </Modal>
 
       <Modal
-        open={isOpen('edit-client')}
+        open={editOpen}
         onClose={() => closeModal('edit-client')}
         title={`Edit Client${selectedClient ? ` — ${selectedClient.name}` : ''}`}
       >
         <FormGroup label="Company Name">
-          <input className="inp" defaultValue={selectedClient?.name ?? ''} />
+          <input
+            className="inp"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+          />
         </FormGroup>
         <FormGroup label="RC Number">
-          <input className="inp" readOnly defaultValue={selectedClient?.rc ?? ''} />
+          <input className="inp" readOnly value={selectedClient?.rc ?? ''} />
         </FormGroup>
         <ModalFooter>
-          <Button variant="danger" style={{ marginRight: 'auto' }} onClick={() => { closeModal('edit-client'); showToast('Client suspended.', 'warn'); }}>
+          <Button
+            variant="danger"
+            style={{ marginRight: 'auto' }}
+            disabled={editSaving || !selectedClient?._id}
+            onClick={async () => {
+              if (!selectedClient?._id) return;
+              setEditSaving(true);
+              try {
+                await platformApi.toggleClient(selectedClient._id);
+                await refresh();
+                closeModal('edit-client');
+                showToast('Client status updated.', 'warn');
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : 'Could not update client.', 'error');
+              } finally {
+                setEditSaving(false);
+              }
+            }}
+          >
             Suspend Client
           </Button>
-          <Button variant="secondary" onClick={() => closeModal('edit-client')}>
+          <Button variant="secondary" onClick={() => closeModal('edit-client')} disabled={editSaving}>
             Cancel
           </Button>
-          <Button className="bacc" onClick={() => { closeModal('edit-client'); showToast('Client details updated.', 'success'); }}>
-            Save Changes
+          <Button
+            className="bacc"
+            disabled={editSaving || !selectedClient?._id}
+            onClick={async () => {
+              if (!selectedClient?._id || !editName.trim()) return;
+              setEditSaving(true);
+              try {
+                await platformApi.patchClient(selectedClient._id, { fullName: editName.trim() });
+                await refresh();
+                closeModal('edit-client');
+                showToast('Client details updated.', 'success');
+              } catch (e) {
+                showToast(e instanceof Error ? e.message : 'Could not save.', 'error');
+              } finally {
+                setEditSaving(false);
+              }
+            }}
+          >
+            {editSaving ? 'Saving…' : 'Save Changes'}
           </Button>
         </ModalFooter>
       </Modal>

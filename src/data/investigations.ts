@@ -4,9 +4,10 @@ export type InvestigationRow = InvestigationDetail & {
   clientShort: string;
   description: string;
   assigned: string;
+  assignedName?: string;
   opened: string;
   status: string;
-  statusVariant: 'ba' | 'br';
+  statusVariant: 'ba' | 'br' | 'bg';
   action: 'review' | 'assign';
 };
 

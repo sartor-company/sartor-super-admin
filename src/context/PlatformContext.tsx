@@ -11,7 +11,7 @@ import { platformApi } from '../api/platform';
 import type { Client } from '../data/clients';
 import type { InvestigationRow } from '../data/investigations';
 import type { OnboardingRow } from '../data/onboarding';
-import type { PlatformSettings, PlatformStaff } from '../types';
+import type { PlatformNotification, PlatformSettings, PlatformStaff } from '../types';
 import type { PlatformCharts } from '../utils/chartSeries';
 
 type PlatformState = {
@@ -28,6 +28,7 @@ type PlatformState = {
   financeSummary: Record<string, unknown> | null;
   reports: Record<string, unknown> | null;
   charts: PlatformCharts | null;
+  notifications: PlatformNotification[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -50,6 +51,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
   const [financeSummary, setFinanceSummary] = useState<Record<string, unknown> | null>(null);
   const [reports, setReports] = useState<Record<string, unknown> | null>(null);
   const [charts, setCharts] = useState<PlatformCharts | null>(null);
+  const [notifications, setNotifications] = useState<PlatformNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,6 +78,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
         platformApi.financeSummary(),
         platformApi.reports(),
         platformApi.charts(),
+        platformApi.notifications(),
       ]);
 
       const val = <T,>(i: number, fallback: T): T =>
@@ -94,6 +97,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       setFinanceSummary(val(10, null));
       setReports(val(11, null));
       setCharts(val(12, null) as PlatformCharts | null);
+      setNotifications(val(13, { data: [] }).data || []);
 
       if (results[0].status === 'rejected') {
         const reason = results[0].reason;
@@ -125,6 +129,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       financeSummary,
       reports,
       charts,
+      notifications,
       loading,
       error,
       refresh,
@@ -144,6 +149,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       financeSummary,
       reports,
       charts,
+      notifications,
       loading,
       error,
       refresh,

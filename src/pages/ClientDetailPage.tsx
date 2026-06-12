@@ -19,38 +19,70 @@ import type { Client } from '../data/clients';
 import { useTabs } from '../hooks/useTabs';
 import { crmPillLabel, crmPillVariant, exportReport, scPillVariant } from './shared';
 
+import { usePlatform } from '../context/PlatformContext';
+
 type ClientTab = 'overview' | 'config' | 'credits' | 'team' | 'skus';
 
-const INITIAL_NOTES: NoteItemData[] = [
-  { author: 'Amaka Eze', date: 'Apr 10, 2026', text: 'Client requested second DORA training for BATCH-041 after label redesign.', warn: false },
-  { author: 'Chidi Ogu', date: 'Mar 28, 2026', text: 'PIN download issue resolved. Batch Admin trained on new ZIP format.', warn: false },
-  { author: 'System Alert', date: 'Apr 15, 2026', text: 'SMS credits below 20% threshold. Auto-alert sent to Account Owner.', warn: true },
-];
+type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  roleVariant: 'bp' | 'bb' | 'bn';
+  access: string;
+  login: string;
+  status: string;
+  isOwner?: boolean;
+};
 
-const TEAM = [
-  { name: 'Nnamdi Okafor', email: 'nnamdi@sartorhealth.com', role: 'Account Owner', roleVariant: 'bp' as const, access: 'SC + CRM', login: 'May 12, 2026' },
-  { name: 'Sarah Adeyemi', email: 'sarah@sartorhealth.com', role: 'Batch Admin', roleVariant: 'bb' as const, access: 'SC', login: 'May 11, 2026' },
-  { name: 'Funmi Hassan', email: 'funmi@sartorhealth.com', role: 'CRM Admin', roleVariant: 'bn' as const, access: 'CRM', login: 'May 12, 2026' },
-];
+type SkuRow = {
+  product: string;
+  sku: string;
+  barcode: string;
+  batches: number;
+  auth: string;
+  dora: string;
+};
 
-const SKUS = [
-  { product: 'Sartor Hand Sanitiser 500ml', sku: 'SC-HPC-SHC-00001', barcode: 'EAN-13', batches: 12, auth: '97.2%', dora: 'Active' },
-  { product: 'Carabiner Holder Pack', sku: 'SC-HPC-SHC-00002', barcode: 'Sartor Code', batches: 8, auth: '98.1%', dora: 'Active' },
-  { product: 'Silicone Holder / Hook Pack', sku: 'SC-HPC-SHC-00003', barcode: 'Sartor Code', batches: 6, auth: '96.8%', dora: 'Active' },
-  { product: 'Sartor Hand Sanitiser 250ml', sku: 'SC-HPC-SHC-00004', barcode: 'EAN-13', batches: 5, auth: '91.2%', dora: 'Pending' },
-];
+type TxRow = {
+  date: string;
+  product: string;
+  type: string;
+  qty: string;
+  amount: string;
+  by: string;
+  inv: string;
+};
 
-const TRANSACTIONS = [
-  { date: 'May 1, 2026', product: 'CRM 360', type: 'Monthly Seats (12)', qty: '12 seats', amount: '₦300,000', by: 'System', inv: 'INV-2026-047' },
-  { date: 'Apr 1, 2026', product: 'SC', type: 'SMS Credits', qty: '+10,000', amount: '₦45,000', by: 'Amaka Eze', inv: 'INV-2026-031' },
-  { date: 'Mar 15, 2026', product: 'SC', type: 'PIN Auth Credits', qty: '+10,000', amount: '₦150,000', by: 'Amaka Eze', inv: 'INV-2026-018' },
-  { date: 'Jan 1, 2026', product: 'SC', type: 'SKU Annual Licences', qty: '3 SKUs', amount: '₦4,200,000', by: 'Chidi Ogu', inv: 'INV-2026-001' },
-];
+type ClientDetail = Client & {
+  notes?: NoteItemData[];
+  skus?: SkuRow[];
+  transactions?: TxRow[];
+  team?: TeamMember[];
+  contactEmail?: string;
+  contactPhone?: string;
+  onboardedAt?: string;
+  engagement?: string;
+  openInvestigations?: number;
+  scEnabled?: boolean;
+  crmEnabled?: boolean;
+  campaignStacking?: boolean;
+  crmSeats?: number;
+  verifyDomain?: string;
+  domainTier?: string;
+};
 
 export function ClientDetailPage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const { setSelectedClientCode, registerNoteHandler } = useApp();
+  const {
+    setSelectedClientCode,
+    setSelectedClientDetail,
+    registerNoteHandler,
+    registerTeamReload,
+    registerClientReload,
+  } = useApp();
+  const { refresh } = usePlatform();
   const { openModal } = useModal();
   const openTeamMember = useOpenTeamMember();
   const { showToast } = useToast();
@@ -58,31 +90,56 @@ export function ClientDetailPage() {
   const [client, setClient] = useState<Client | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [notes, setNotes] = useState(INITIAL_NOTES);
+  const [notes, setNotes] = useState<NoteItemData[]>([]);
   const [creditQty, setCreditQty] = useState('');
   const [creditAmount, setCreditAmount] = useState('');
-  const [creditType, setCreditType] = useState('Batch Calibration');
+  const [creditType, setCreditType] = useState('PIN Authentication');
   const [creditInv, setCreditInv] = useState('');
+  const [creditSaving, setCreditSaving] = useState(false);
+  const [scEnabled, setScEnabled] = useState(true);
+  const [crmEnabledCfg, setCrmEnabledCfg] = useState(false);
+  const [campaignStacking, setCampaignStacking] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+
+  const reloadClient = async (clientCode: string) => {
+    const data = (await platformApi.client(clientCode)) as ClientDetail;
+    setClient(data);
+    setDetail(data as unknown as Record<string, unknown>);
+    setSelectedClientDetail(data);
+    if (data.notes?.length) setNotes(data.notes);
+    return data;
+  };
 
   useEffect(() => {
     if (!code) return;
     setLoading(true);
-    platformApi
-      .client(code)
-      .then((data) => {
-        const d = data as Client & {
-          notes?: NoteItemData[];
-          skus?: typeof SKUS;
-          transactions?: typeof TRANSACTIONS;
-          users?: typeof TEAM;
-        };
-        setClient(d);
-        setDetail(data as Record<string, unknown>);
-        if (d.notes?.length) setNotes(d.notes);
+    reloadClient(code)
+      .catch(() => {
+        setClient(null);
+        setSelectedClientDetail(null);
       })
-      .catch(() => setClient(null))
       .finally(() => setLoading(false));
-  }, [code]);
+  }, [code, setSelectedClientDetail]);
+
+  useEffect(() => {
+    const reload = () => {
+      if (code) reloadClient(code).catch(() => undefined);
+    };
+    registerTeamReload(reload);
+    registerClientReload(reload);
+    return () => {
+      registerTeamReload(null);
+      registerClientReload(null);
+    };
+  }, [code, registerTeamReload, registerClientReload]);
+
+  useEffect(() => {
+    const cfg = detail as unknown as ClientDetail | null;
+    if (!cfg) return;
+    setScEnabled(cfg.scEnabled !== false);
+    setCrmEnabledCfg(!!cfg.crmEnabled);
+    setCampaignStacking(!!cfg.campaignStacking);
+  }, [detail]);
 
   useEffect(() => {
     registerNoteHandler(async (text) => {
@@ -120,13 +177,80 @@ export function ClientDetailPage() {
     );
   }
 
-  const pilot = client.scband === 'Pilot';
+  const d = detail as unknown as ClientDetail | null;
+  const pilot = client.scband === 'Pilot' || d?.engagement === 'pilot';
   const crmVar = crmPillVariant(client.crm);
   const crmLbl = crmPillLabel(client.crm);
-  const skuCount = String(client.skus ?? (pilot ? '1' : '—'));
-  const apiSkus = (detail?.skus as typeof SKUS) || SKUS;
-  const apiTeam = (detail?.users as Array<{ fullName?: string; email?: string; role?: string }>) || [];
-  const apiTransactions = (detail?.transactions as typeof TRANSACTIONS) || TRANSACTIONS;
+  const skuCount = String(client.skus ?? 0);
+  const apiSkus = d?.skus ?? [];
+  const apiTeam = d?.team ?? [];
+  const apiTransactions = d?.transactions ?? [];
+  const pinCredits = client.pinCredits ?? 0;
+  const smsCredits = client.smsCredits ?? 0;
+  const openInvCount = d?.openInvestigations ?? 0;
+  const crmSeatCount = d?.crmSeats ?? client.crmSeats ?? 0;
+  const verifyDomain = d?.verifyDomain || client.verifyDomain || 'verify.sartor.com';
+
+  const saveConfig = async () => {
+    const id = client._id;
+    if (!id) return;
+    setConfigSaving(true);
+    try {
+      await platformApi.patchClient(id, {
+        scEnabled,
+        crmEnabled: crmEnabledCfg,
+        campaignStacking,
+      });
+      await reloadClient(code!);
+      await refresh();
+      showToast('Configuration saved.', 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not save configuration.', 'error');
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
+  const addCredits = async () => {
+    const id = client._id;
+    if (!id || !creditQty.trim() || !creditAmount.trim()) {
+      showToast('Please fill in quantity and amount.', 'error');
+      return;
+    }
+    const qty = parseInt(creditQty, 10);
+    if (!qty || qty < 1) {
+      showToast('Enter a valid quantity.', 'error');
+      return;
+    }
+    const amount = parseFloat(creditAmount.replace(/,/g, ''));
+    setCreditSaving(true);
+    try {
+      const patch: Record<string, number> = {};
+      if (creditType === 'PIN Authentication') patch.pinCredits = pinCredits + qty;
+      else if (creditType === 'SMS Notifications') patch.smsCredits = smsCredits + qty;
+      else {
+        showToast('Batch calibration credits are logged via invoice only.', 'success');
+      }
+      if (Object.keys(patch).length) await platformApi.patchClient(id, patch);
+      await platformApi.createInvoice({
+        adminId: id,
+        clientName: client.name,
+        clientCode: client.code,
+        description: `${creditType} — ${qty.toLocaleString()} units`,
+        amount,
+      });
+      if (code) await reloadClient(code);
+      await refresh();
+      showToast(`${qty.toLocaleString()} ${creditType} added. Invoice created.`, 'success');
+      setCreditQty('');
+      setCreditAmount('');
+      setCreditInv('');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not add credits.', 'error');
+    } finally {
+      setCreditSaving(false);
+    }
+  };
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview' },
@@ -219,10 +343,10 @@ export function ClientDetailPage() {
           )}
           <KCardGrid columns={4}>
             <KCard label="Total SKUs" value={skuCount} />
-            <KCard label="Active Batches" value={pilot ? '0' : '12'} />
-            <KCard label="Auth Rate (30d)" value={client.authRate === '—' ? '—' : client.authRate} trend="↑ 1.2%" trendType="up" />
+            <KCard label="Active Batches" value={String(client.batches ?? 0)} />
+            <KCard label="Auth Rate (30d)" value={client.authRate === '—' ? '—' : client.authRate} trendType="up" />
             <div style={{ cursor: 'pointer' }} onClick={() => navigate('/investigations')} role="presentation">
-              <KCard label="Open Investigations" value="4" trend="Click to view" trendType="dn" />
+              <KCard label="Open Investigations" value={String(openInvCount)} trend="Click to view" trendType="dn" />
             </div>
           </KCardGrid>
           <div className="r2">
@@ -252,11 +376,11 @@ export function ClientDetailPage() {
                 </div>
                 <div>
                   <div style={{ color: 'var(--text3)', marginBottom: 2 }}>Contact</div>
-                  <div style={{ fontWeight: 500 }}>Nnamdi Okafor</div>
+                  <div style={{ fontWeight: 500 }}>{d?.contactEmail || '—'}</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--text3)', marginBottom: 2 }}>Email</div>
-                  <div style={{ fontWeight: 500 }}>nnamdi@sartorhealth.com</div>
+                  <div style={{ color: 'var(--text3)', marginBottom: 2 }}>Phone</div>
+                  <div style={{ fontWeight: 500 }}>{d?.contactPhone || '—'}</div>
                 </div>
                 <div>
                   <div style={{ color: 'var(--text3)', marginBottom: 2 }}>SC Band</div>
@@ -276,7 +400,7 @@ export function ClientDetailPage() {
                 </div>
                 <div>
                   <div style={{ color: 'var(--text3)', marginBottom: 2 }}>Onboarded</div>
-                  <div style={{ fontWeight: 500 }}>Jan 1, 2026</div>
+                  <div style={{ fontWeight: 500 }}>{d?.onboardedAt || '—'}</div>
                 </div>
                 <div style={{ gridColumn: 'span 2' }}>
                   <div style={{ color: 'var(--text3)', marginBottom: 2 }}>Account Manager</div>
@@ -311,7 +435,7 @@ export function ClientDetailPage() {
                 </div>
               </FormGroup>
               <FormGroup label="Verification Domain">
-                <input className="inp" value="verify.sartor.com (Starter)" readOnly />
+                <input className="inp" value={verifyDomain} readOnly />
               </FormGroup>
             </div>
             <div className="fr2">
@@ -325,8 +449,8 @@ export function ClientDetailPage() {
                 <input className="inp" value={`${skuCount} active models`} readOnly />
               </FormGroup>
             </div>
-            <Button variant="primary" size="sm" onClick={() => showToast('Configuration saved.', 'success')}>
-              Save
+            <Button variant="primary" size="sm" onClick={saveConfig} disabled={configSaving}>
+              {configSaving ? 'Saving…' : 'Save'}
             </Button>
           </Card>
           <Card>
@@ -382,11 +506,11 @@ export function ClientDetailPage() {
               Super Admin only. Cannot be self-served by client.
             </div>
             <ToggleRow
+              key={`stack-${String(campaignStacking)}`}
               label="Campaign stacking (default OFF)"
               description="Allow consumers to win from multiple simultaneous campaigns per scan. FIRST_AUTH pools always exempt."
-              defaultOn={false}
-              messageOn="Campaign stacking enabled."
-              messageOff="Campaign stacking disabled."
+              defaultOn={campaignStacking}
+              onToggle={setCampaignStacking}
             />
           </Card>
           {client.crm && (
@@ -399,7 +523,7 @@ export function ClientDetailPage() {
                   <input className="inp" value={client.crm} readOnly />
                 </FormGroup>
                 <FormGroup label="Active Seats">
-                  <input className="inp" value="12 of 20 provisioned" readOnly />
+                  <input className="inp" value={`${crmSeatCount} provisioned`} readOnly />
                 </FormGroup>
               </div>
               <div className="fr2">
@@ -411,11 +535,14 @@ export function ClientDetailPage() {
                 </FormGroup>
               </div>
               <ToggleRow
+                key={`crm-int-${scEnabled}-${crmEnabledCfg}`}
                 label="SartorChain + DORA integration"
                 description="Authentication events available in CRM 360 supply chain reports. Bidirectional sync."
-                defaultOn
-                messageOn="Integration setting updated."
-                messageOff="Integration setting updated."
+                defaultOn={scEnabled && crmEnabledCfg}
+                onToggle={(on) => {
+                  setScEnabled(on);
+                  setCrmEnabledCfg(on);
+                }}
               />
               <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
                 <Button variant="secondary" size="sm" onClick={() => openModal('seatadj')}>
@@ -434,23 +561,8 @@ export function ClientDetailPage() {
         <>
           <SectionTitle style={{ marginTop: 0 }}>SartorChain Credits</SectionTitle>
           <div className="kgrid3">
-            <KCard
-              label="Batch Calibration"
-              value="18"
-              trend="of 30 purchased"
-              trendType="neu"
-              progressPercent={60}
-              progressColor="var(--amber)"
-            />
-            <KCard label="PIN Authentication" value="8,200" trend="of 10,000" trendType="up" progressPercent={82} />
-            <KCard
-              label="SMS Notifications"
-              value="5,876"
-              trend="41% used"
-              trendType="dn"
-              progressPercent={59}
-              progressColor="var(--amber)"
-            />
+            <KCard label="PIN Authentication" value={String(pinCredits)} trend="Live balance" trendType="up" />
+            <KCard label="SMS Notifications" value={String(smsCredits)} trend="Live balance" trendType="neu" />
           </div>
           <Card>
             <div className="ch">
@@ -490,25 +602,8 @@ export function ClientDetailPage() {
                 onChange={(e) => setCreditInv(e.target.value)}
               />
             </FormGroup>
-            <Button
-              className="bacc"
-              size="sm"
-              onClick={() => {
-                if (!creditQty.trim() || !creditAmount.trim()) {
-                  showToast('Please fill in quantity and amount.', 'error');
-                  return;
-                }
-                const qty = parseInt(creditQty, 10);
-                showToast(
-                  `${qty.toLocaleString()} ${creditType} added. Transaction logged.`,
-                  'success',
-                );
-                setCreditQty('');
-                setCreditAmount('');
-                setCreditInv('');
-              }}
-            >
-              Add Credits & Log Transaction
+            <Button className="bacc" size="sm" onClick={addCredits} disabled={creditSaving}>
+              {creditSaving ? 'Saving…' : 'Add Credits & Create Invoice'}
             </Button>
           </Card>
           {client.crm && (
@@ -566,8 +661,15 @@ export function ClientDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {apiTransactions.map((t) => (
-                  <tr key={t.inv}>
+                {apiTransactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text3)' }}>
+                      No transactions yet.
+                    </td>
+                  </tr>
+                ) : (
+                  apiTransactions.map((t) => (
+                    <tr key={t.inv}>
                     <td>{t.date}</td>
                     <td>
                       <ProductPill variant={t.product.includes('360') ? '360' : 'growth'}>{t.product}</ProductPill>
@@ -578,7 +680,8 @@ export function ClientDetailPage() {
                     <td>{t.by}</td>
                     <td style={{ fontFamily: "'DM Mono', monospace", fontSize: 11 }}>{t.inv}</td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </Card>
@@ -589,7 +692,11 @@ export function ClientDetailPage() {
         <Card>
           <div className="ch">
             <div className="ct">Client Team Members</div>
-            <Button className="bacc" size="sm" onClick={() => openTeamMember(null)}>
+            <Button
+              className="bacc"
+              size="sm"
+              onClick={() => client._id && openTeamMember(client._id, null)}
+            >
               + Add Member
             </Button>
           </div>
@@ -606,41 +713,49 @@ export function ClientDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {TEAM.map((m) => (
-                <tr key={m.email}>
-                  <td>
-                    <strong>{m.name}</strong>
-                  </td>
-                  <td>{m.email}</td>
-                  <td>
-                    <Badge variant={m.roleVariant}>{m.role}</Badge>
-                  </td>
-                  <td>{m.access}</td>
-                  <td>{m.login}</td>
-                  <td>
-                    <Badge variant="bg">Active</Badge>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 5 }}>
-                      <Button variant="secondary" size="sm" onClick={() => openTeamMember(m.name)}>
-                        Edit
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => showToast('Password reset sent.', 'success')}
-                      >
-                        Reset PW
-                      </Button>
-                      {m.name === 'Funmi Hassan' && (
-                        <Button variant="danger" size="sm" onClick={() => showToast('User deactivated.', 'warn')}>
-                          Deactivate
-                        </Button>
-                      )}
-                    </div>
+              {apiTeam.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text3)' }}>
+                    No team members yet.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                apiTeam.map((m) => (
+                  <tr key={m.id || m.email}>
+                    <td>
+                      <strong>{m.name}</strong>
+                    </td>
+                    <td>{m.email}</td>
+                    <td>
+                      <Badge variant={m.roleVariant}>{m.role}</Badge>
+                    </td>
+                    <td>{m.access}</td>
+                    <td>{m.login}</td>
+                    <td>
+                      <Badge variant={m.status === 'Active' ? 'bg' : 'bx'}>{m.status}</Badge>
+                    </td>
+                    <td>
+                      {!m.isOwner && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            client._id &&
+                            openTeamMember(client._id, {
+                              id: m.id,
+                              name: m.name,
+                              email: m.email,
+                              role: m.role,
+                            })
+                          }
+                        >
+                          Edit
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </Card>
@@ -654,7 +769,20 @@ export function ClientDetailPage() {
               <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'SKU List')}>
                 ↓ Export
               </Button>
-              <Button className="bacc" size="sm" onClick={() => showToast('SKU registration request sent.', 'success')}>
+              <Button
+                className="bacc"
+                size="sm"
+                onClick={async () => {
+                  const id = client._id;
+                  if (!id) return;
+                  try {
+                    await platformApi.addNote(id, 'SKU registration requested by platform team.');
+                    showToast('SKU registration request logged.', 'success');
+                  } catch {
+                    showToast('Could not log request.', 'error');
+                  }
+                }}
+              >
                 + Register SKU
               </Button>
             </div>
@@ -671,8 +799,15 @@ export function ClientDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {apiSkus.map((s) => (
-                <tr key={s.sku}>
+              {apiSkus.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text3)' }}>
+                    No SKUs registered yet.
+                  </td>
+                </tr>
+              ) : (
+                apiSkus.map((s) => (
+                  <tr key={s.sku}>
                   <td>
                     <strong>{s.product}</strong>
                   </td>
@@ -684,7 +819,8 @@ export function ClientDetailPage() {
                     <Badge variant={s.dora === 'Active' ? 'bg' : 'ba'}>{s.dora}</Badge>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </Card>

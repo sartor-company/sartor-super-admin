@@ -7,6 +7,7 @@ import { KCard, KCardGrid } from '../components/ui/KCard';
 import { ProductPill } from '../components/ui/ProductPill';
 import { CardLinkAction, ChartPanel, PageHeader } from '../components/patterns';
 import type { OnboardingRow } from '../data/onboarding';
+import { useApp } from '../context/AppContext';
 import { usePlatform } from '../context/PlatformContext';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
@@ -19,6 +20,7 @@ export function OpsDashboardPage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
+  const { openOnboardingAssign } = useApp();
   const { onboarding, overview, tickets, doraQueue, charts, loading } = usePlatform();
   const healthSeries = useMemo(
     () =>
@@ -152,7 +154,14 @@ export function OpsDashboardPage() {
                         </Button>
                       )}
                       {r.action === 'assign' && (
-                        <Button variant="primary" size="sm" onClick={() => openModal('assign')}>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            openOnboardingAssign(r._id ?? null);
+                            openModal('assign');
+                          }}
+                        >
                           Assign
                         </Button>
                       )}

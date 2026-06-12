@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { useModal } from '../context/ModalContext';
+import type { TeamMemberEdit } from '../types';
 
 export function useFollowUp() {
   const { openFollowUp } = useApp();
@@ -33,8 +34,8 @@ export function useOpenTeamMember() {
   const { openModal } = useModal();
 
   return useCallback(
-    (name: string | null) => {
-      openTeamMemberModal(name);
+    (clientId: string, member: TeamMemberEdit | null = null) => {
+      openTeamMemberModal(clientId, member);
       openModal('teammember');
     },
     [openTeamMemberModal, openModal],

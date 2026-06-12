@@ -18,7 +18,7 @@ export function OverviewPage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
-  const { overview, clients, charts, loading } = usePlatform();
+  const { overview, clients, charts, investigations, onboarding, doraQueue, loading } = usePlatform();
   const scanSeries = useMemo(
     () =>
       charts?.scanVolume?.length
@@ -50,6 +50,90 @@ export function OverviewPage() {
   ];
 
   const openClient = (code: string) => navigate(`/clients/${code}`);
+
+  const actionItems = useMemo(() => {
+    const items: Array<{
+      key: string;
+      tone: 'critical' | 'attention' | 'setup';
+      title: string;
+      badge: string;
+      badgeVariant: 'br' | 'ba' | 'bb';
+      description: string;
+      buttonLabel: string;
+      buttonVariant?: 'danger' | 'accent' | 'secondary';
+      onClick: () => void;
+    }> = [];
+
+    const p1 = investigations.find((i) => i.severity === 'P1' && i.status !== 'Closed');
+    if (p1) {
+      items.push({
+        key: 'p1-inv',
+        tone: 'critical',
+        title: `P1 — ${p1.client}`,
+        badge: 'Critical',
+        badgeVariant: 'br',
+        description: `${p1.batch} · ${p1.id}`,
+        buttonLabel: 'Review',
+        buttonVariant: 'danger',
+        onClick: () => navigate('/investigations'),
+      });
+    }
+
+    const doraAwaiting = (doraQueue as { stage?: string; batch?: string; waitingDays?: number }[]).filter(
+      (q) => q.stage === 'awaiting' || q.stage === 'review',
+    );
+    if (doraAwaiting.length > 0) {
+      const oldest = [...doraAwaiting].sort(
+        (a, b) => (b.waitingDays || 0) - (a.waitingDays || 0),
+      )[0];
+      items.push({
+        key: 'dora',
+        tone: 'attention',
+        title: `${doraAwaiting.length} Batches Awaiting DORA`,
+        badge: 'Attention',
+        badgeVariant: 'ba',
+        description: oldest?.batch
+          ? `Oldest: ${oldest.batch} at ${oldest.waitingDays ?? 0} days`
+          : 'Training queue backlog',
+        buttonLabel: 'Training Queue',
+        onClick: () => navigate('/aiml/queue'),
+      });
+    }
+
+    const lowCredit = clients.find(
+      (c) => (c.pinCredits ?? 0) > 0 && (c.pinCredits ?? 0) < 1000,
+    );
+    if (lowCredit) {
+      items.push({
+        key: 'pin',
+        tone: 'attention',
+        title: `${lowCredit.name} PIN Credits Low`,
+        badge: 'Urgent',
+        badgeVariant: 'ba',
+        description: `~${lowCredit.pinCredits?.toLocaleString()} PINs remaining.`,
+        buttonLabel: 'Contact',
+        onClick: () => followUp(lowCredit.name, 'PIN credits running low.', lowCredit._id),
+      });
+    }
+
+    const blocked = onboarding.find(
+      (o) => o.blocker && o.blocker !== 'None' && o.blocker !== 'Unassigned',
+    );
+    if (blocked) {
+      items.push({
+        key: 'onboard',
+        tone: 'setup',
+        title: `${blocked.client} — Onboarding Blocked`,
+        badge: 'Setup',
+        badgeVariant: 'bb',
+        description: blocked.blocker,
+        buttonLabel: 'Follow Up',
+        onClick: () => followUp(blocked.client, blocked.followUpMessage ?? blocked.blocker, blocked._id),
+      });
+    }
+
+    return items.slice(0, 4);
+  }, [investigations, doraQueue, clients, onboarding, navigate, followUp]);
 
   return (
     <>
@@ -207,43 +291,23 @@ export function OverviewPage() {
         <Card style={{ marginBottom: 0 }}>
           <CardHeader title="Actions required" />
           <div style={{ display: 'grid', gap: 7 }}>
-            <AlertPanelButton
-              tone="critical"
-              title="P1 — NaturalKing Batch Mismatch"
-              badge="Critical"
-              badgeVariant="br"
-              description="BATCH-NK-019 — Shanghai origin. INV-2026-112."
-              buttonLabel="Review"
-              buttonVariant="danger"
-              onClick={() => navigate('/investigations')}
-            />
-            <AlertPanelButton
-              tone="attention"
-              title="7 Batches Awaiting DORA Training"
-              badge="Attention"
-              badgeVariant="ba"
-              description="Oldest: BATCH-DP-042 at 6 days."
-              buttonLabel="Training Queue"
-              onClick={() => navigate('/aiml/queue')}
-            />
-            <AlertPanelButton
-              tone="attention"
-              title="NaturalKing PIN Credits at 8%"
-              badge="Urgent"
-              badgeVariant="ba"
-              description="~800 PINs remaining. 4 days."
-              buttonLabel="Contact"
-              onClick={() => followUp('NaturalKing FMCG', 'PIN credits critical.')}
-            />
-            <AlertPanelButton
-              tone="setup"
-              title="FreshNow — Onboarding Blocked"
-              badge="Setup"
-              badgeVariant="bb"
-              description="DORA images not uploaded."
-              buttonLabel="Follow Up"
-              onClick={() => followUp('FreshNow Consumer', 'DORA reference images required.')}
-            />
+            {actionItems.length === 0 ? (
+              <p style={{ color: 'var(--text3)', fontSize: 13 }}>No urgent actions right now.</p>
+            ) : (
+              actionItems.map((a) => (
+                <AlertPanelButton
+                  key={a.key}
+                  tone={a.tone}
+                  title={a.title}
+                  badge={a.badge}
+                  badgeVariant={a.badgeVariant}
+                  description={a.description}
+                  buttonLabel={a.buttonLabel}
+                  buttonVariant={a.buttonVariant}
+                  onClick={a.onClick}
+                />
+              ))
+            )}
           </div>
         </Card>
       </div>

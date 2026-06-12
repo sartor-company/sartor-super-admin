@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -11,6 +12,7 @@ import type { DoraQueueRow } from '../types/dora';
 import { exportReport } from './shared';
 
 export function AimlDashboardPage() {
+  const navigate = useNavigate();
   const { openModal } = useModal();
   const { showToast } = useToast();
   const { doraStats, doraQueue, clients, loading } = usePlatform();
@@ -98,7 +100,7 @@ export function AimlDashboardPage() {
                     <Badge variant={r.status === 'Attention' ? 'ba' : 'bg'}>{r.status}</Badge>
                   </td>
                   <td>
-                    <Button variant="secondary" size="sm" onClick={() => showToast(`Client ${r.code} detail opened.`)}>
+                    <Button variant="secondary" size="sm" onClick={() => navigate(`/clients/${r.code}`)}>
                       Detail
                     </Button>
                     {r.status === 'Attention' && (

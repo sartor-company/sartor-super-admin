@@ -9,9 +9,14 @@ import {
   type ReactNode,
 } from 'react';
 import type { Client } from '../data/clients';
-import { CLIENTS } from '../data/clients';
 import { useAuthStore } from '../store/authStore';
-import type { InvestigationDetail, RoleId } from '../types';
+import type {
+  DoraLabelContext,
+  InvestigationDetail,
+  RoleId,
+  TeamMemberEdit,
+  TicketDetail,
+} from '../types';
 
 interface AppContextValue {
   role: RoleId;
@@ -20,6 +25,7 @@ interface AppContextValue {
   closeSidebar: () => void;
   selectedClient: Client | null;
   setSelectedClientCode: (code: string) => void;
+  setSelectedClientDetail: (client: Client | null) => void;
   followUp: { client: string; clientId?: string; message: string; subject: string } | null;
   openFollowUp: (client: string, message?: string, clientId?: string) => void;
   investigation: InvestigationDetail | null;
@@ -29,11 +35,28 @@ interface AppContextValue {
   notifDot: boolean;
   clearNotifDot: () => void;
   staffEditId: string | null;
-  teamMemberEditName: string | null;
+  onboardingAssignId: string | null;
+  investigationAssignId: string | null;
+  ticketAssignId: string | null;
+  ticketEscalateId: string | null;
+  activeTicket: TicketDetail | null;
+  doraLabel: DoraLabelContext | null;
+  teamMemberClientId: string | null;
+  teamMemberEdit: TeamMemberEdit | null;
   openStaffModal: (id: string | null) => void;
-  openTeamMemberModal: (name: string | null) => void;
+  openOnboardingAssign: (adminId: string | null) => void;
+  openInvestigationAssign: (investigationId: string | null) => void;
+  openTicketAssign: (ticketId: string | null) => void;
+  openTicketEscalate: (ticketId: string | null) => void;
+  openTicketView: (ticket: TicketDetail | null) => void;
+  openDoraLabel: (label: DoraLabelContext | null) => void;
+  openTeamMemberModal: (clientId: string, member?: TeamMemberEdit | null) => void;
   registerNoteHandler: (handler: ((text: string) => void) | null) => void;
   submitClientNote: (text: string) => void;
+  registerTeamReload: (handler: (() => void) | null) => void;
+  notifyTeamReload: () => void;
+  registerClientReload: (handler: (() => void) | null) => void;
+  notifyClientReload: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -43,6 +66,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [role, setRoleState] = useState<RoleId>(authRole || 'super');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedClientCode, setSelectedClientCode] = useState('SHC');
+  const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
   const [followUp, setFollowUp] = useState<{
     client: string;
     clientId?: string;
@@ -53,17 +77,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifDot, setNotifDot] = useState(true);
   const [staffEditId, setStaffEditId] = useState<string | null>(null);
-  const [teamMemberEditName, setTeamMemberEditName] = useState<string | null>(null);
+  const [onboardingAssignId, setOnboardingAssignId] = useState<string | null>(null);
+  const [investigationAssignId, setInvestigationAssignId] = useState<string | null>(null);
+  const [ticketAssignId, setTicketAssignId] = useState<string | null>(null);
+  const [ticketEscalateId, setTicketEscalateId] = useState<string | null>(null);
+  const [activeTicket, setActiveTicket] = useState<TicketDetail | null>(null);
+  const [doraLabel, setDoraLabel] = useState<DoraLabelContext | null>(null);
+  const [teamMemberClientId, setTeamMemberClientId] = useState<string | null>(null);
+  const [teamMemberEdit, setTeamMemberEdit] = useState<TeamMemberEdit | null>(null);
   const noteHandlerRef = useRef<((text: string) => void) | null>(null);
+  const teamReloadRef = useRef<(() => void) | null>(null);
+  const clientReloadRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (authRole) setRoleState(authRole);
   }, [authRole]);
 
-  const selectedClient = useMemo(
-    () => CLIENTS.find((c) => c.code === selectedClientCode) ?? null,
-    [selectedClientCode],
-  );
+  const selectedClient = selectedClientDetail;
 
   const openFollowUp = useCallback((client: string, message = '', clientId?: string) => {
     setFollowUp({
@@ -84,8 +114,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStaffEditId(id);
   }, []);
 
-  const openTeamMemberModal = useCallback((name: string | null) => {
-    setTeamMemberEditName(name);
+  const openTeamMemberModal = useCallback((clientId: string, member: TeamMemberEdit | null = null) => {
+    setTeamMemberClientId(clientId);
+    setTeamMemberEdit(member);
   }, []);
 
   const registerNoteHandler = useCallback((handler: ((text: string) => void) | null) => {
@@ -96,6 +127,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     noteHandlerRef.current?.(text);
   }, []);
 
+  const openOnboardingAssign = useCallback((adminId: string | null) => {
+    setOnboardingAssignId(adminId);
+  }, []);
+
+  const openInvestigationAssign = useCallback((investigationId: string | null) => {
+    setInvestigationAssignId(investigationId);
+  }, []);
+
+  const openTicketAssign = useCallback((ticketId: string | null) => {
+    setTicketAssignId(ticketId);
+  }, []);
+
+  const openTicketEscalate = useCallback((ticketId: string | null) => {
+    setTicketEscalateId(ticketId);
+  }, []);
+
+  const openTicketView = useCallback((ticket: TicketDetail | null) => {
+    setActiveTicket(ticket);
+  }, []);
+
+  const openDoraLabel = useCallback((label: DoraLabelContext | null) => {
+    setDoraLabel(label);
+  }, []);
+
+  const registerTeamReload = useCallback((handler: (() => void) | null) => {
+    teamReloadRef.current = handler;
+  }, []);
+
+  const notifyTeamReload = useCallback(() => {
+    teamReloadRef.current?.();
+  }, []);
+
+  const registerClientReload = useCallback((handler: (() => void) | null) => {
+    clientReloadRef.current = handler;
+  }, []);
+
+  const notifyClientReload = useCallback(() => {
+    clientReloadRef.current?.();
+  }, []);
+
   const value = useMemo(
     () => ({
       role,
@@ -104,6 +175,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       closeSidebar: () => setSidebarOpen(false),
       selectedClient,
       setSelectedClientCode,
+      setSelectedClientDetail,
       followUp,
       openFollowUp,
       investigation,
@@ -113,11 +185,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notifDot,
       clearNotifDot,
       staffEditId,
-      teamMemberEditName,
+      onboardingAssignId,
+      investigationAssignId,
+      ticketAssignId,
+      ticketEscalateId,
+      activeTicket,
+      doraLabel,
+      teamMemberClientId,
+      teamMemberEdit,
       openStaffModal,
+      openOnboardingAssign,
+      openInvestigationAssign,
+      openTicketAssign,
+      openTicketEscalate,
+      openTicketView,
+      openDoraLabel,
       openTeamMemberModal,
       registerNoteHandler,
       submitClientNote,
+      registerTeamReload,
+      notifyTeamReload,
+      registerClientReload,
+      notifyClientReload,
     }),
     [
       role,
@@ -131,11 +220,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notifDot,
       clearNotifDot,
       staffEditId,
-      teamMemberEditName,
+      onboardingAssignId,
+      investigationAssignId,
+      ticketAssignId,
+      ticketEscalateId,
+      activeTicket,
+      doraLabel,
+      teamMemberClientId,
+      teamMemberEdit,
       openStaffModal,
+      openOnboardingAssign,
+      openInvestigationAssign,
+      openTicketAssign,
+      openTicketEscalate,
+      openTicketView,
+      openDoraLabel,
       openTeamMemberModal,
       registerNoteHandler,
       submitClientNote,
+      registerTeamReload,
+      notifyTeamReload,
+      registerClientReload,
+      notifyClientReload,
     ],
   );
 

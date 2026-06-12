@@ -2,6 +2,7 @@ import { apiClient, unwrap } from './client';
 import type { Client } from '../data/clients';
 import type { InvestigationRow } from '../data/investigations';
 import type { OnboardingRow } from '../data/onboarding';
+import type { PlatformNotification } from '../types';
 
 export const platformApi = {
   login: (email: string, password: string) =>
@@ -20,6 +21,9 @@ export const platformApi = {
 
   overview: () => apiClient.get('/sartor/overview').then((r) => unwrap(r)),
 
+  notifications: () =>
+    apiClient.get('/sartor/notifications').then((r) => unwrap<{ data: PlatformNotification[] }>(r)),
+
   dashboard: () => apiClient.get('/sartor/dashboard').then((r) => unwrap(r)),
 
   clients: (params?: { search?: string; status?: string }) =>
@@ -36,6 +40,15 @@ export const platformApi = {
 
   addNote: (id: string, text: string, warn?: boolean) =>
     apiClient.post(`/sartor/clients/${id}/notes`, { text, warn }).then((r) => unwrap(r)),
+
+  createClientUser: (clientId: string, body: Record<string, unknown>) =>
+    apiClient.post(`/sartor/clients/${clientId}/users`, body).then((r) => unwrap(r)),
+
+  patchClientUser: (clientId: string, userId: string, body: Record<string, unknown>) =>
+    apiClient.patch(`/sartor/clients/${clientId}/users/${userId}`, body).then((r) => unwrap(r)),
+
+  convertPilot: (clientId: string, body: Record<string, unknown>) =>
+    apiClient.post(`/sartor/clients/${clientId}/convert-pilot`, body).then((r) => unwrap(r)),
 
   onboarding: () =>
     apiClient.get('/sartor/onboarding').then((r) => unwrap<{ data: OnboardingRow[] }>(r)),
@@ -66,6 +79,19 @@ export const platformApi = {
   doraQueue: () => apiClient.get('/sartor/dora/queue').then((r) => unwrap(r)),
 
   doraStats: () => apiClient.get('/sartor/dora/stats').then((r) => unwrap(r)),
+
+  patchDoraLabel: (id: string, body: Record<string, unknown>) =>
+    apiClient.patch(`/sartor/dora/labels/${id}`, body).then((r) => unwrap(r)),
+
+  doraResubmit: (id: string, body: Record<string, unknown>) =>
+    apiClient.post(`/sartor/dora/labels/${id}/resubmit`, body).then((r) => unwrap(r)),
+
+  uploadDoraLabel: (id: string, form: FormData) =>
+    apiClient
+      .post(`/sartor/dora/labels/${id}/upload`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then((r) => unwrap(r)),
 
   investigations: () =>
     apiClient.get('/sartor/investigations').then((r) => unwrap<{ data: InvestigationRow[] }>(r)),

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { platformApi } from '../api/platform';
 import { Button } from '../components/ui/Button';
 import { FormGroup } from '../components/ui/FormGroup';
@@ -9,19 +9,25 @@ import { formatNaira } from '../utils/format';
 
 const STEPS = ['Company Information', 'Products & Engagement', 'Admin Account Setup', 'Review & Activate'];
 
+function scBandFromSkus(n: number): 'Pilot' | 'Starter' | 'Growth' {
+  if (n <= 5) return 'Starter';
+  return 'Growth';
+}
+
 export function OnboardWizard() {
   const { closeModal } = useModal();
   const { showToast } = useToast();
   const { refresh } = usePlatform();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+
   const [companyName, setCompanyName] = useState('');
   const [rcNumber, setRcNumber] = useState('');
   const [industry, setIndustry] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
+
   const [crmOn, setCrmOn] = useState(false);
   const [eng, setEng] = useState<'pilot' | 'full'>('pilot');
   const [crmRate, setCrmRate] = useState(0);
@@ -29,7 +35,15 @@ export function OnboardWizard() {
   const [crmSeats, setCrmSeats] = useState('');
   const [crmCycle, setCrmCycle] = useState('monthly');
   const [skuN, setSkuN] = useState('');
-  const [scBand, setScBand] = useState<'Pilot' | 'Starter' | 'Growth'>('Pilot');
+
+  const [adminFirstName, setAdminFirstName] = useState('');
+  const [adminLastName, setAdminLastName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+
+  const onboardingFee = eng === 'pilot' ? 3500000 : 4500000;
+  const skuCount = parseInt(skuN, 10) || 0;
+  const scBand = eng === 'pilot' ? 'Pilot' : skuCount > 0 ? scBandFromSkus(skuCount) : 'Pilot';
 
   const obCrmBilling = () => {
     const rate = crmRate;
@@ -51,7 +65,7 @@ export function OnboardWizard() {
   };
 
   const skuBand = () => {
-    const n = parseInt(skuN, 10) || 0;
+    const n = skuCount;
     if (n >= 1 && n <= 5)
       return (
         <div style={{ marginTop: 7, padding: 9, background: 'var(--gb)', borderRadius: 7, fontSize: 12, color: 'var(--gt)' }}>
@@ -86,31 +100,91 @@ export function OnboardWizard() {
     );
   };
 
-  const finish = async () => {
-    if (!companyName || !contactEmail) {
-      showToast('Company name and contact email are required.', 'error');
-      return;
+  const validateStep = (s: number): boolean => {
+    if (s === 0) {
+      if (!companyName.trim() || !rcNumber.trim() || !industry || !contactEmail.trim()) {
+        showToast('Company name, RC number, industry, and contact email are required.', 'error');
+        return false;
+      }
+      return true;
     }
+    if (s === 1) {
+      if (crmOn && (!crmRate || !crmSeats || parseInt(crmSeats, 10) < 1)) {
+        showToast('Select a CRM tier and seat count.', 'error');
+        return false;
+      }
+      if (eng === 'full' && skuCount < 1) {
+        showToast('Enter initial SKU count for full deployment.', 'error');
+        return false;
+      }
+      return true;
+    }
+    if (s === 2) {
+      if (!adminFirstName.trim() || !adminLastName.trim() || !adminEmail.trim()) {
+        showToast('Admin first name, last name, and login email are required.', 'error');
+        return false;
+      }
+      return true;
+    }
+    return true;
+  };
+
+  const goNext = () => {
+    if (!validateStep(step)) return;
+    if (step < STEPS.length - 1) setStep((s) => s + 1);
+    else finish();
+  };
+
+  const reviewLines = useMemo(
+    () => [
+      { label: 'Company', value: companyName || '—' },
+      { label: 'RC Number', value: rcNumber || '—' },
+      { label: 'Industry', value: industry || '—' },
+      { label: 'Contact email', value: contactEmail || '—' },
+      { label: 'Engagement', value: eng === 'pilot' ? 'Pilot Programme' : 'Full Deployment' },
+      { label: 'SC Band', value: scBand },
+      { label: 'CRM', value: crmOn ? `${crmName} · ${crmSeats || 0} seats` : 'Not included' },
+      { label: 'Admin login', value: adminEmail || '—' },
+      { label: 'Onboarding fee', value: formatNaira(onboardingFee) },
+    ],
+    [
+      companyName,
+      rcNumber,
+      industry,
+      contactEmail,
+      eng,
+      scBand,
+      crmOn,
+      crmName,
+      crmSeats,
+      adminEmail,
+      onboardingFee,
+    ],
+  );
+
+  const finish = async () => {
+    if (!validateStep(0) || !validateStep(1) || !validateStep(2)) return;
     setSaving(true);
     try {
       await platformApi.onboard({
-        fullName: companyName,
-        email: contactEmail,
-        phone,
-        address,
+        fullName: companyName.trim(),
+        email: adminEmail.trim(),
+        phone: phone.trim() || undefined,
+        address: address.trim() || undefined,
         industry,
-        rcNumber,
-        password: adminPassword || undefined,
+        rcNumber: rcNumber.trim(),
+        password: adminPassword.trim() || undefined,
+        contactEmail: contactEmail.trim(),
         scBand,
         engagement: eng,
         crmEnabled: crmOn,
-        crmTier: crmName || undefined,
-        crmSeats: crmSeats ? parseInt(crmSeats, 10) : undefined,
-        skuCount: skuN ? parseInt(skuN, 10) : undefined,
+        crmTier: crmOn ? crmName : undefined,
+        crmSeats: crmOn && crmSeats ? parseInt(crmSeats, 10) : undefined,
+        skuCount: eng === 'full' && skuCount > 0 ? skuCount : undefined,
       });
       await refresh();
       closeModal('onboard');
-      showToast('Client onboarded. Welcome email sent.', 'success');
+      showToast(`${companyName} onboarded. Welcome email sent.`, 'success');
       setStep(0);
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Onboarding failed', 'error');
@@ -166,11 +240,14 @@ export function OnboardWizard() {
               </select>
             </FormGroup>
           </div>
+          <FormGroup label="Business Address">
+            <input className="inp" value={address} onChange={(e) => setAddress(e.target.value)} />
+          </FormGroup>
           <div className="fr2">
             <FormGroup label="Phone">
               <input className="inp" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </FormGroup>
-            <FormGroup label="Contact Email *">
+            <FormGroup label="Primary Contact Email *">
               <input
                 className="inp"
                 type="email"
@@ -289,7 +366,7 @@ export function OnboardWizard() {
           </div>
           {eng === 'full' && (
             <FormGroup label="Initial SKU Count *">
-              <input type="number" className="inp" value={skuN} onChange={(e) => setSkuN(e.target.value)} />
+              <input type="number" className="inp" value={skuN} onChange={(e) => setSkuN(e.target.value)} min={1} />
               {skuBand()}
             </FormGroup>
           )}
@@ -301,14 +378,29 @@ export function OnboardWizard() {
           <div className="info-b">ℹ Creates the primary client admin account. Welcome email sent on activation.</div>
           <div className="fr2">
             <FormGroup label="First Name *">
-              <input className="inp" />
+              <input className="inp" value={adminFirstName} onChange={(e) => setAdminFirstName(e.target.value)} />
             </FormGroup>
             <FormGroup label="Last Name *">
-              <input className="inp" />
+              <input className="inp" value={adminLastName} onChange={(e) => setAdminLastName(e.target.value)} />
             </FormGroup>
           </div>
           <FormGroup label="Admin Email * (login email)">
-            <input className="inp" type="email" placeholder="admin@clientdomain.com" />
+            <input
+              className="inp"
+              type="email"
+              placeholder="admin@clientdomain.com"
+              value={adminEmail}
+              onChange={(e) => setAdminEmail(e.target.value)}
+            />
+          </FormGroup>
+          <FormGroup label="Temporary Password (optional)">
+            <input
+              className="inp"
+              type="password"
+              placeholder="Auto-generated if blank"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+            />
           </FormGroup>
         </>
       )}
@@ -318,31 +410,23 @@ export function OnboardWizard() {
           <div style={{ padding: '9px 11px', background: 'var(--gb)', borderRadius: 7, fontSize: 12, color: 'var(--gt)', marginBottom: 14 }}>
             ✓ Review all details before activating.
           </div>
-          <div className="srow">
-            <span style={{ color: 'var(--text2)' }}>Company</span>
-            <strong>New Client Ltd</strong>
-          </div>
-          <div className="srow">
-            <span style={{ color: 'var(--text2)' }}>Fee Received</span>
-            <strong>₦3,500,000</strong>
-          </div>
+          {reviewLines.map((row) => (
+            <div className="srow" key={row.label}>
+              <span style={{ color: 'var(--text2)' }}>{row.label}</span>
+              <strong>{row.value}</strong>
+            </div>
+          ))}
           <div className="warn-b" style={{ marginTop: 12 }}>
-            ⚠ Confirm fee receipt before activating.
+            ⚠ Confirm fee receipt before activating. Invoice for {formatNaira(onboardingFee)} will be created.
           </div>
         </>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-        <Button variant="secondary" style={{ visibility: step === 0 ? 'hidden' : 'visible' }} onClick={() => setStep((s) => s - 1)}>
+        <Button variant="secondary" style={{ visibility: step === 0 ? 'hidden' : 'visible' }} onClick={() => setStep((s) => s - 1)} disabled={saving}>
           ← Back
         </Button>
-        <Button
-          className="bacc"
-          onClick={() => {
-            if (step < STEPS.length - 1) setStep((s) => s + 1);
-            else finish();
-          }}
-        >
+        <Button className="bacc" onClick={goNext} disabled={saving}>
           {step === STEPS.length - 1 ? (saving ? 'Activating…' : 'Activate Client Account ✓') : 'Continue →'}
         </Button>
       </div>

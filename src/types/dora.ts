@@ -2,6 +2,7 @@ import type { BadgeVariant } from './index';
 
 export type DoraQueueRow = {
   _id: string;
+  adminId?: string;
   batch: string;
   client: string;
   product: string;

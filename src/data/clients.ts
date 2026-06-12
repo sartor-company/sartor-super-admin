@@ -20,6 +20,13 @@ export interface Client {
   status: 'Active' | 'Onboarding' | 'Attention';
   products: string;
   am?: string;
+  crmSeats?: number;
+  verifyDomain?: string;
+  domainTier?: string;
+  campaignStacking?: boolean;
+  scEnabled?: boolean;
+  crmEnabled?: boolean;
+  engagement?: string;
 }
 
 export const CLIENTS: Client[] = [

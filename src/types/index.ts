@@ -26,6 +26,7 @@ export type ModalId =
   | 'seatadj'
   | 'crm-tier'
   | 'ticket'
+  | 'ticket-detail'
   | 'escalate'
   | 'domain-upgrade'
   | 'convert'
@@ -75,10 +76,52 @@ export interface PageMeta {
 
 export interface InvestigationDetail {
   id: string;
+  _id?: string;
   client: string;
   batch: string;
   severity: 'P1' | 'P2' | 'P3';
   desc: string;
+  status?: string;
+  assigned?: string;
+  assignedTo?: string;
+  assignedName?: string;
+}
+
+export interface TeamMemberEdit {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface TicketDetail {
+  id: string;
+  _id?: string;
+  client: string;
+  subject?: string;
+  description: string;
+  priority?: string;
+  status?: string;
+  assigned?: string;
+  assignedTo?: string;
+  escalated?: boolean;
+}
+
+export interface PlatformNotification {
+  id: string;
+  color: string;
+  title: string;
+  body: string;
+  time: string;
+  titleColor?: string;
+  href?: string;
+}
+
+export interface DoraLabelContext {
+  _id: string;
+  batch: string;
+  client: string;
+  adminId?: string;
 }
 
 export interface PlatformSettings {

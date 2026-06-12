@@ -96,12 +96,15 @@ Client companies use `model-admin` (**Owner**) and `model-user` (Sales Rep, etc.
 | Reports tabs | overview + clients + invoices + tickets + investigations | ReportsPage |
 | DORA queue | `GET /sartor/dora/queue`, `GET /sartor/dora/stats` | AimlQueue, AimlDashboard |
 | Investigations | `GET/POST/PATCH /sartor/investigations` | InvestigationsPage |
-| Support | `GET/POST/PATCH /sartor/tickets` | SupportPage |
+| Support | `GET/POST/PATCH /sartor/tickets` | SupportPage, TicketDetailModal, assign modal |
+| Client team users | `POST/PATCH /sartor/clients/:id/users` | TeamMemberModal |
+| Pilot conversion | `POST /sartor/clients/:id/convert-pilot` | Convert modal |
+| DORA label actions | `PATCH /sartor/dora/labels/:id`, `POST …/resubmit` | AIML queue, upload/review modals |
 | Settings & staff | `GET/PATCH /sartor/settings`, `GET/POST/PATCH /sartor/staff` | SettingsPage, StaffModal |
 | Follow-up email | `POST /sartor/clients/:id/follow-up` | FollowUpModal |
 | Create invoice | `POST /sartor/invoices` | InvoiceModal |
 | Staff welcome email | sent on `POST /sartor/staff` | StaffModal create |
 
-**Still placeholder / static in places:** overview `platformAuthRate`, health uptime/p95/SMS percentages (shown from overview API but not yet computed from telemetry).
+**Still placeholder / static in places:** health uptime/p95/SMS in overview are static estimates until real telemetry is wired; notifications panel is UI-only; DORA upload uses logged placeholder image URIs (no multipart file store yet).
 
 When wiring new screens, use `usePlatform()` or `platformApi.*` — do not read from `src/data/*.ts` except as TypeScript shapes.

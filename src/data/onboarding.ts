@@ -1,4 +1,5 @@
 export type OnboardingRow = {
+  _id?: string;
   client: string;
   product: string;
   productLabel: string;

@@ -4,7 +4,9 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { TabBar } from '../components/ui/TabBar';
 import { InfoBanner, MonoCell, PageHeader } from '../components/patterns';
+import { useApp } from '../context/AppContext';
 import { usePlatform } from '../context/PlatformContext';
+import { platformApi } from '../api/platform';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
@@ -17,7 +19,8 @@ export function AimlQueuePage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
-  const { doraQueue, loading } = usePlatform();
+  const { openDoraLabel } = useApp();
+  const { doraQueue, loading, refresh } = usePlatform();
   const { active, setActive, isActive } = useTabs<QueueTab>('wait');
 
   const queue = doraQueue as DoraQueueRow[];
@@ -31,6 +34,25 @@ export function AimlQueuePage() {
     { id: 'train' as const, label: `In Training (${training.length})` },
     { id: 'review' as const, label: `Review Required (${review.length})` },
   ];
+
+  const openLabel = (row: DoraQueueRow) => {
+    openDoraLabel({
+      _id: row._id,
+      batch: row.batch,
+      client: row.client,
+      adminId: row.adminId,
+    });
+  };
+
+  const retryTraining = async (row: DoraQueueRow) => {
+    try {
+      await platformApi.patchDoraLabel(row._id, { status: 'training', markUploaded: true });
+      await refresh();
+      showToast(`${row.batch} marked for re-training.`, 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not retry training.', 'error');
+    }
+  };
 
   const renderEmpty = (msg: string) => (
     <p style={{ color: 'var(--text3)', fontSize: 13 }}>{msg}</p>
@@ -81,14 +103,25 @@ export function AimlQueuePage() {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 5 }}>
-                          <Button className="bacc" size="sm" onClick={() => openModal('upload-images')}>
+                          <Button
+                            className="bacc"
+                            size="sm"
+                            onClick={() => {
+                              openLabel(row);
+                              openModal('upload-images');
+                            }}
+                          >
                             Upload
                           </Button>
                           <Button
                             variant="secondary"
                             size="sm"
                             onClick={() =>
-                              followUp(row.client, `${row.batch} reference images required (${row.waiting}).`)
+                              followUp(
+                                row.client,
+                                `${row.batch} reference images required (${row.waiting}).`,
+                                row.adminId,
+                              )
                             }
                           >
                             Chase
@@ -176,14 +209,17 @@ export function AimlQueuePage() {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 5 }}>
-                          <Button
-                            variant="success"
-                            size="sm"
-                            onClick={() => showToast(`${row.batch} marked for re-training.`, 'success')}
-                          >
+                          <Button variant="success" size="sm" onClick={() => retryTraining(row)}>
                             Retry
                           </Button>
-                          <Button variant="danger" size="sm" onClick={() => openModal('model-review')}>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => {
+                              openLabel(row);
+                              openModal('model-review');
+                            }}
+                          >
                             Review
                           </Button>
                         </div>
