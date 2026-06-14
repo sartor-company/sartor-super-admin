@@ -247,7 +247,7 @@ export function ModalsRoot() {
 
       <Modal open={tierOpen} onClose={() => closeModal('crm-tier')} title="Change CRM Tier" width={560}>
         <InfoBanner>ℹ Tier change takes effect next billing cycle unless specified.</InfoBanner>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
+        <div className="crm-tier-grid" style={{ marginBottom: 14 }}>
           {[
             { name: 'Sales Navigator', price: '₦5,000', desc: 'Basic sales management' },
             { name: 'Sales Navigator Plus', price: '₦12,000', desc: 'Advanced reporting & routing' },

@@ -27,7 +27,7 @@ export function Modal({
       }}
       role="presentation"
     >
-      <div className="modal" style={{ width }} role="dialog" aria-modal="true">
+      <div className="modal" style={{ width, maxWidth: 'calc(100vw - 32px)' }} role="dialog" aria-modal="true">
         {(title || subtitle) && (
           <div className="mhd">
             <div>

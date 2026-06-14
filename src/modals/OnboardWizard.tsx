@@ -10,11 +10,6 @@ import { calcCrmBilling, calcOnboardingTotal } from '../utils/pricing';
 
 const STEPS = ['Company Information', 'Products & Engagement', 'Admin Account Setup', 'Review & Activate'];
 
-function scBandFromSkus(n: number): 'Pilot' | 'Starter' | 'Growth' {
-  if (n <= 5) return 'Starter';
-  return 'Growth';
-}
-
 export function OnboardWizard() {
   const { closeModal } = useModal();
   const { showToast } = useToast();
@@ -35,7 +30,6 @@ export function OnboardWizard() {
   const [crmName, setCrmName] = useState('');
   const [crmSeats, setCrmSeats] = useState('');
   const [crmCycle, setCrmCycle] = useState('monthly');
-  const [skuN, setSkuN] = useState('');
 
   const [adminFirstName, setAdminFirstName] = useState('');
   const [adminLastName, setAdminLastName] = useState('');
@@ -43,11 +37,8 @@ export function OnboardWizard() {
   const [adminPassword, setAdminPassword] = useState('');
 
   const [feeReceived, setFeeReceived] = useState('');
-  const [feeConfirm, setFeeConfirm] = useState(false);
 
-  const onboardingFee = eng === 'pilot' ? 3500000 : 4500000;
-  const skuCount = parseInt(skuN, 10) || 0;
-  const scBand = eng === 'pilot' ? 'Pilot' : skuCount > 0 ? scBandFromSkus(skuCount) : 'Pilot';
+  const scBand = eng === 'pilot' ? 'Pilot' : 'Starter';
 
   const obCrmBilling = () => {
     const seats = parseInt(crmSeats, 10) || 0;
@@ -73,53 +64,17 @@ export function OnboardWizard() {
     );
   };
 
-  const skuBand = () => {
-    const n = skuCount;
-    if (n >= 1 && n <= 5)
-      return (
-        <div style={{ marginTop: 7, padding: 9, background: 'var(--gb)', borderRadius: 7, fontSize: 12, color: 'var(--gt)' }}>
-          <strong>Starter (1–5 SKUs)</strong> — {formatNaira(350000)}/SKU/yr · Total:{' '}
-          <span style={{ color: 'var(--gt)' }}>{formatNaira(n * 350000)}/yr</span>
-        </div>
-      );
-    if (n >= 6 && n <= 20)
-      return (
-        <div style={{ marginTop: 7, padding: 9, background: 'var(--gb)', borderRadius: 7, fontSize: 12, color: 'var(--gt)' }}>
-          <strong>Growth (6–20 SKUs)</strong> — {formatNaira(250000)}/SKU/yr · Total:{' '}
-          <span style={{ color: 'var(--gt)' }}>{formatNaira(n * 250000)}/yr</span>
-        </div>
-      );
-    if (n >= 21 && n <= 50)
-      return (
-        <div style={{ marginTop: 7, padding: 9, background: 'var(--gb)', borderRadius: 7, fontSize: 12, color: 'var(--gt)' }}>
-          <strong>Enterprise (21–50 SKUs)</strong> — {formatNaira(175000)}/SKU/yr · Total:{' '}
-          <span style={{ color: 'var(--gt)' }}>{formatNaira(n * 175000)}/yr</span>
-        </div>
-      );
-    if (n > 50)
-      return (
-        <div style={{ marginTop: 7, padding: 9, background: 'var(--pb)', borderRadius: 7, fontSize: 12, color: 'var(--pt)' }}>
-          <strong>Enterprise+ (51+ SKUs)</strong> — Negotiated rate. Contact Sartor.
-        </div>
-      );
-    return (
-      <div style={{ marginTop: 7, padding: 9, background: 'var(--bg)', borderRadius: 7, fontSize: 12, color: 'var(--text2)' }}>
-        Enter SKU count to see rate.
-      </div>
-    );
-  };
-
   const billing = useMemo(
     () =>
       calcOnboardingTotal({
         engagement: eng,
-        skuCount,
+        skuCount: 0,
         crmOn,
         crmRate,
         crmSeats: parseInt(crmSeats, 10) || 0,
         crmCycle,
       }),
-    [eng, skuCount, crmOn, crmRate, crmSeats, crmCycle],
+    [eng, crmOn, crmRate, crmSeats, crmCycle],
   );
 
   const validateStep = (s: number): boolean => {
@@ -135,34 +90,11 @@ export function OnboardWizard() {
         showToast('Select a CRM tier and seat count.', 'error');
         return false;
       }
-      if (eng === 'full' && skuCount < 1) {
-        showToast('Enter initial SKU count for full deployment.', 'error');
-        return false;
-      }
-      const received = parseInt(feeReceived.replace(/\D/g, ''), 10) || 0;
-      if (!received) {
-        showToast('Enter the fee amount received.', 'error');
-        return false;
-      }
-      if (received !== billing.grandTotal) {
-        showToast(
-          `Fee received (${formatNaira(received)}) must match total due (${formatNaira(billing.grandTotal)}).`,
-          'error',
-        );
-        return false;
-      }
       return true;
     }
     if (s === 2) {
       if (!adminFirstName.trim() || !adminLastName.trim() || !adminEmail.trim()) {
         showToast('Admin first name, last name, and login email are required.', 'error');
-        return false;
-      }
-      return true;
-    }
-    if (s === 3) {
-      if (!feeConfirm) {
-        showToast('Confirm payment receipt before activating.', 'error');
         return false;
       }
       return true;
@@ -189,17 +121,12 @@ export function OnboardWizard() {
       { label: 'Onboarding fee', value: formatNaira(billing.onboardingFee) },
       {
         label: 'Fee received',
-        value: feeReceived ? formatNaira(parseInt(feeReceived.replace(/\D/g, ''), 10) || 0) : '—',
+        value: feeReceived
+          ? formatNaira(parseInt(feeReceived.replace(/\D/g, ''), 10) || 0)
+          : 'None — payment pending',
       },
+      { label: 'Payment status', value: 'Pending (confirm in Finance)' },
     ];
-    if (billing.sku && !billing.sku.negotiated) {
-      lines.push({
-        label: `SKU licence (${billing.sku.band})`,
-        value: formatNaira(billing.sku.total),
-      });
-    } else if (billing.sku?.negotiated) {
-      lines.push({ label: 'SKU licence', value: 'Negotiated (contact Sartor)' });
-    }
     if (billing.crm) {
       if (crmCycle === 'annual') {
         lines.push({
@@ -259,7 +186,6 @@ export function OnboardWizard() {
         crmRate: crmOn ? crmRate : undefined,
         crmCycle: crmOn ? crmCycle : undefined,
         crmSeats: crmOn && crmSeats ? parseInt(crmSeats, 10) : undefined,
-        skuCount: eng === 'full' && skuCount > 0 ? skuCount : undefined,
       });
       await refresh();
       closeModal('onboard');
@@ -345,7 +271,7 @@ export function OnboardWizard() {
             <label className="fi" style={{ marginBottom: 8 }}>
               Products Subscribing To *
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div className="choice-grid">
               <label style={{ border: '2px solid var(--accent)', background: '#fff8f6', borderRadius: 8, padding: 12, cursor: 'pointer', display: 'block' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                   <input type="checkbox" defaultChecked readOnly />
@@ -374,7 +300,7 @@ export function OnboardWizard() {
           {crmOn && (
             <div style={{ border: '1px solid var(--border)', borderRadius: 9, padding: 13, background: 'var(--bg)', marginBottom: 13 }}>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Select CRM Tier</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+              <div className="crm-tier-grid">
                 {[
                   { rate: 5000, name: 'Sales Navigator', price: '₦5,000/seat/month' },
                   { rate: 12000, name: 'Sales Nav Plus', price: '₦12,000/seat/month' },
@@ -409,7 +335,7 @@ export function OnboardWizard() {
             </div>
           )}
           <div className="sdiv">SartorChain Engagement Type</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 13 }}>
+          <div className="choice-grid" style={{ marginBottom: 13 }}>
             <button
               type="button"
               style={{
@@ -443,17 +369,11 @@ export function OnboardWizard() {
               <div style={{ fontSize: 12, fontWeight: 600 }}>₦4,500,000 (₦1M pilot convert)</div>
             </button>
           </div>
-          {eng === 'full' && (
-            <FormGroup label="Initial SKU Count *">
-              <input type="number" className="inp" value={skuN} onChange={(e) => setSkuN(e.target.value)} min={1} />
-              {skuBand()}
-            </FormGroup>
-          )}
-          <FormGroup label="Fee Received (₦) *">
+          <FormGroup label="Fee Received (₦) — optional">
             <input
               type="number"
               className="inp"
-              placeholder="Amount received"
+              placeholder="Leave blank if payment not yet received"
               value={feeReceived}
               onChange={(e) => setFeeReceived(e.target.value)}
               min={0}
@@ -461,6 +381,8 @@ export function OnboardWizard() {
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
               Total due at activation: <strong>{formatNaira(billing.grandTotal)}</strong>
               {eng === 'pilot' ? ' · Pilot fee credited on full deployment within 90 days.' : ''}
+              {' · '}
+              Invoices are created as <strong>Pending</strong> — mark paid later in Finance.
             </div>
           </FormGroup>
         </>
@@ -519,17 +441,11 @@ export function OnboardWizard() {
               color: 'var(--bt)',
             }}
           >
-            <strong>Invoices to be created</strong>
+            <strong>Invoices to be created (Pending)</strong>
             <div className="srow" style={{ marginTop: 6 }}>
               <span>Onboarding fee</span>
               <span>{formatNaira(billing.onboardingFee)}</span>
             </div>
-            {billing.sku && !billing.sku.negotiated && (
-              <div className="srow">
-                <span>SKU licence</span>
-                <span>{formatNaira(billing.sku.total)}</span>
-              </div>
-            )}
             {billing.crm && (
               <div className="srow">
                 <span>CRM {crmCycle === 'annual' ? '(annual, 20% off)' : '(monthly)'}</span>
@@ -541,26 +457,9 @@ export function OnboardWizard() {
               <span>{formatNaira(billing.grandTotal)}</span>
             </div>
           </div>
-          <div style={{ marginTop: 12 }}>
-            <FormGroup label="Confirmation *">
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={feeConfirm}
-                  onChange={(e) => setFeeConfirm(e.target.checked)}
-                  style={{ marginTop: 2 }}
-                />
-                <span>
-                  I confirm payment of <strong>{formatNaira(billing.grandTotal)}</strong> has been received.
-                  {crmOn && crmCycle === 'annual' && (
-                    <>
-                      {' '}
-                      CRM annual billing includes a <strong>20% discount</strong> off the 12‑month list price.
-                    </>
-                  )}
-                </span>
-              </label>
-            </FormGroup>
+          <div className="info-b" style={{ marginTop: 12 }}>
+            ℹ Payment confirmation is not required to activate. Invoices will be created as{' '}
+            <strong>Pending</strong> — use Finance → Mark Paid when payment is received.
           </div>
         </>
       )}
