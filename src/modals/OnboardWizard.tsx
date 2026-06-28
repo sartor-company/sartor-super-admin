@@ -13,7 +13,7 @@ const STEPS = ['Company Information', 'Products & Engagement', 'Admin Account Se
 export function OnboardWizard() {
   const { closeModal } = useModal();
   const { showToast } = useToast();
-  const { refresh } = usePlatform();
+  const { refreshClients, refreshOnboarding } = usePlatform();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
@@ -187,12 +187,23 @@ export function OnboardWizard() {
         crmCycle: crmOn ? crmCycle : undefined,
         crmSeats: crmOn && crmSeats ? parseInt(crmSeats, 10) : undefined,
       });
-      await refresh();
+      await Promise.all([refreshClients(), refreshOnboarding()]);
       closeModal('onboard');
       showToast(`${companyName} onboarded. Welcome email sent.`, 'success');
       setStep(0);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Onboarding failed', 'error');
+      const msg = e instanceof Error ? e.message : 'Onboarding failed';
+      const isAuth =
+        e &&
+        typeof e === 'object' &&
+        'response' in e &&
+        (e as { response?: { status?: number } }).response?.status === 401;
+      showToast(
+        isAuth
+          ? 'Session expired — sign in again and retry. The client was not created.'
+          : msg,
+        'error',
+      );
     } finally {
       setSaving(false);
     }

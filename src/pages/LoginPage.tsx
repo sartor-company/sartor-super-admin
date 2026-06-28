@@ -1,5 +1,5 @@
-import { FormEvent, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { FormEvent, useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { platformApi } from '../api/platform';
 import { useAuthStore } from '../store/authStore';
 import { ROLES } from '../constants/roles';
@@ -25,6 +25,8 @@ function EyeIcon({ open }: { open: boolean }) {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get('session') === 'expired';
   const setAuth = useAuthStore((s) => s.setAuth);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,6 +34,12 @@ export function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (sessionExpired) {
+      useAuthStore.getState().logout();
+    }
+  }, [sessionExpired]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -103,6 +111,12 @@ export function LoginPage() {
           <p className="login-panel-kicker">SARTOR PLATFORM</p>
           <h2 className="login-panel-title">Welcome back</h2>
           <p className="login-panel-sub">Sign in to continue to the internal console</p>
+
+          {sessionExpired && (
+            <div className="login-error">
+              Your session expired or is invalid for this server. Sign in again, then retry onboarding.
+            </div>
+          )}
 
           {error && <div className="login-error">{error}</div>}
 

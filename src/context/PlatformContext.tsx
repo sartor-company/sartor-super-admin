@@ -33,6 +33,7 @@ type PlatformState = {
   error: string | null;
   refresh: () => Promise<void>;
   refreshClients: () => Promise<void>;
+  refreshOnboarding: () => Promise<void>;
 };
 
 const PlatformContext = createContext<PlatformState | null>(null);
@@ -58,6 +59,11 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
   const refreshClients = useCallback(async () => {
     const res = await platformApi.clients();
     setClients(res.data || []);
+  }, []);
+
+  const refreshOnboarding = useCallback(async () => {
+    const res = await platformApi.onboarding();
+    setOnboarding(res.data || []);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -134,6 +140,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       error,
       refresh,
       refreshClients,
+      refreshOnboarding,
     }),
     [
       clients,
@@ -154,6 +161,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       error,
       refresh,
       refreshClients,
+      refreshOnboarding,
     ],
   );
 
