@@ -11,6 +11,7 @@ import type { Client } from '../data/clients';
 import type { InvestigationRow } from '../data/investigations';
 import { usePlatform } from '../context/PlatformContext';
 import { useFollowUp } from '../hooks/useFollowUp';
+import { useRoleGates } from '../hooks/useRoleGates';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
 import { RevenueBarChart, RevenueDonutChart } from '../components/charts/AdminCharts';
@@ -48,6 +49,7 @@ export function ReportsPage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
+  const { can } = useRoleGates();
   const { active, setActive } = useTabs<ReportTab>('revenue');
   const [clientFilter, setClientFilter] = useState('All Clients');
   const [range, setRange] = useState('7 days');
@@ -185,9 +187,11 @@ export function ReportsPage() {
             <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Report', 'csv')}>
               ↓ Export CSV
             </Button>
-            <Button variant="primary" size="sm" onClick={() => openModal('invoice')}>
-              + Create Invoice
-            </Button>
+            {can('invoice') && (
+              <Button variant="primary" size="sm" onClick={() => openModal('invoice')}>
+                + Create Invoice
+              </Button>
+            )}
           </div>
         }
       />
@@ -655,7 +659,7 @@ export function ReportsPage() {
                               Remind
                             </Button>
                           )}
-                          {row.status === 'Pending' && (
+                          {row.status === 'Pending' && can('invoice') && (
                             <Button variant="success" size="sm" onClick={() => markPaid(row)}>
                               Mark Paid
                             </Button>

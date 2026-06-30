@@ -6,6 +6,7 @@ import type { NavBadgeKey } from '../types';
 export function computeNavBadges(input: {
   clients: Client[];
   onboarding: OnboardingRow[];
+  stickerOrders: { stage: string; pinStatus: string }[];
   doraQueue: Record<string, unknown>[];
   investigations: InvestigationRow[];
   tickets: Record<string, unknown>[];
@@ -19,6 +20,10 @@ export function computeNavBadges(input: {
   const badges: Partial<Record<NavBadgeKey, number>> = {};
   if (attentionClients > 0) badges.attentionClients = attentionClients;
   if (input.onboarding.length > 0) badges.onboarding = input.onboarding.length;
+  const stickerPending = input.stickerOrders.filter(
+    (o) => o.stage === 'pin_gen' || o.pinStatus !== 'complete',
+  ).length;
+  if (stickerPending > 0) badges.stickerOrders = stickerPending;
   if (input.doraQueue.length > 0) badges.doraQueue = input.doraQueue.length;
   if (openInvestigations > 0) badges.investigations = openInvestigations;
   if (openTickets > 0) badges.support = openTickets;

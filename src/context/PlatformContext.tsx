@@ -11,12 +11,15 @@ import { platformApi } from '../api/platform';
 import type { Client } from '../data/clients';
 import type { InvestigationRow } from '../data/investigations';
 import type { OnboardingRow } from '../data/onboarding';
+import type { StickerOrderRow, StickerOrderSummary } from '../data/stickerOrders';
 import type { PlatformNotification, PlatformSettings, PlatformStaff } from '../types';
 import type { PlatformCharts } from '../utils/chartSeries';
 
 type PlatformState = {
   clients: Client[];
   onboarding: OnboardingRow[];
+  stickerOrders: StickerOrderRow[];
+  stickerSummary: StickerOrderSummary | null;
   investigations: InvestigationRow[];
   overview: Record<string, unknown> | null;
   invoices: Record<string, unknown>[];
@@ -34,6 +37,7 @@ type PlatformState = {
   refresh: () => Promise<void>;
   refreshClients: () => Promise<void>;
   refreshOnboarding: () => Promise<void>;
+  refreshStickerOrders: () => Promise<void>;
 };
 
 const PlatformContext = createContext<PlatformState | null>(null);
@@ -41,6 +45,8 @@ const PlatformContext = createContext<PlatformState | null>(null);
 export function PlatformProvider({ children }: { children: ReactNode }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [onboarding, setOnboarding] = useState<OnboardingRow[]>([]);
+  const [stickerOrders, setStickerOrders] = useState<StickerOrderRow[]>([]);
+  const [stickerSummary, setStickerSummary] = useState<StickerOrderSummary | null>(null);
   const [investigations, setInvestigations] = useState<InvestigationRow[]>([]);
   const [overview, setOverview] = useState<Record<string, unknown> | null>(null);
   const [invoices, setInvoices] = useState<Record<string, unknown>[]>([]);
@@ -66,6 +72,12 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
     setOnboarding(res.data || []);
   }, []);
 
+  const refreshStickerOrders = useCallback(async () => {
+    const res = await platformApi.stickerOrders();
+    setStickerOrders(res.data || []);
+    setStickerSummary(res.summary || null);
+  }, []);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -74,6 +86,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
         platformApi.overview(),
         platformApi.clients(),
         platformApi.onboarding(),
+        platformApi.stickerOrders().catch(() => ({ data: [], summary: null })),
         platformApi.investigations(),
         platformApi.invoices(),
         platformApi.tickets(),
@@ -93,17 +106,20 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       setOverview(val(0, null));
       setClients(val(1, { data: [] }).data || []);
       setOnboarding(val(2, { data: [] }).data || []);
-      setInvestigations(val(3, { data: [] }).data || []);
-      setInvoices(val(4, { data: [] }).data || []);
-      setTickets(val(5, { data: [] }).data || []);
-      setDoraQueue(val(6, { data: [] }).data || []);
-      setDoraStats(val(7, null));
-      setStaff(val(8, { data: [] }).data || []);
-      setSettings(val(9, null) as PlatformSettings | null);
-      setFinanceSummary(val(10, null));
-      setReports(val(11, null));
-      setCharts(val(12, null) as PlatformCharts | null);
-      setNotifications(val(13, { data: [] }).data || []);
+      const stickerRes = val(3, { data: [], summary: null });
+      setStickerOrders(stickerRes.data || []);
+      setStickerSummary(stickerRes.summary || null);
+      setInvestigations(val(4, { data: [] }).data || []);
+      setInvoices(val(5, { data: [] }).data || []);
+      setTickets(val(6, { data: [] }).data || []);
+      setDoraQueue(val(7, { data: [] }).data || []);
+      setDoraStats(val(8, null));
+      setStaff(val(9, { data: [] }).data || []);
+      setSettings(val(10, null) as PlatformSettings | null);
+      setFinanceSummary(val(11, null));
+      setReports(val(12, null));
+      setCharts(val(13, null) as PlatformCharts | null);
+      setNotifications(val(14, { data: [] }).data || []);
 
       if (results[0].status === 'rejected') {
         const reason = results[0].reason;
@@ -124,6 +140,8 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
     () => ({
       clients,
       onboarding,
+      stickerOrders,
+      stickerSummary,
       investigations,
       overview,
       invoices,
@@ -141,10 +159,13 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       refresh,
       refreshClients,
       refreshOnboarding,
+      refreshStickerOrders,
     }),
     [
       clients,
       onboarding,
+      stickerOrders,
+      stickerSummary,
       investigations,
       overview,
       invoices,
@@ -162,6 +183,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       refresh,
       refreshClients,
       refreshOnboarding,
+      refreshStickerOrders,
     ],
   );
 

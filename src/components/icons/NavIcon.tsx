@@ -114,6 +114,18 @@ export function NavIcon({ name }: { name: NavIconKey }) {
           <line x1="1" y1="7" x2="15" y2="7" stroke="currentColor" strokeWidth="1.3" />
         </svg>
       );
+    case 'tag':
+      return (
+        <svg {...common} fill="none">
+          <path
+            d="M2 2h5l7 7-5 5L2 7V2z"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinejoin="round"
+          />
+          <circle cx="5" cy="5" r="1.2" fill="currentColor" />
+        </svg>
+      );
     default:
       return null;
   }

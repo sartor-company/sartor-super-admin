@@ -11,3 +11,4 @@ export { FinancePage } from './FinancePage';
 export { AimlDashboardPage } from './AimlDashboardPage';
 export { AimlQueuePage } from './AimlQueuePage';
 export { SupportPage } from './SupportPage';
+export { StickerOrdersPage } from './StickerOrdersPage';

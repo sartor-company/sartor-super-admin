@@ -1,5 +1,6 @@
 import { ROLES } from '../constants/roles';
 import type { RoleId } from '../types';
+import { isPathAllowed } from './roleGates';
 
 export function roleAllowedPaths(role: RoleId): string[] {
   const paths = new Set<string>();
@@ -12,6 +13,7 @@ export function roleAllowedPaths(role: RoleId): string[] {
 }
 
 export function canAccessPath(role: RoleId, pathname: string): boolean {
+  if (!isPathAllowed(role, pathname)) return false;
   for (const raw of roleAllowedPaths(role)) {
     const base = raw.split('?')[0];
     if (base === pathname) return true;

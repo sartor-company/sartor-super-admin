@@ -5,19 +5,19 @@ import { Button } from '../components/ui/Button';
 import { Card, CardHeader } from '../components/ui/Card';
 import { ClientAvatar } from '../components/ui/ClientAvatar';
 import { KCard } from '../components/ui/KCard';
+import { SubscriptionTierPills } from '../components/ui/SubscriptionTierPills';
 import { AlertPanelButton, CardLinkAction, ChartPanel, PageHeader, StatRow } from '../components/patterns';
-import { ProductPill } from '../components/ui/ProductPill';
 import { useFollowUp } from '../hooks/useFollowUp';
+import { useRoleGates } from '../hooks/useRoleGates';
 import { useModal } from '../context/ModalContext';
-import { useToast } from '../context/ToastContext';
 import { usePlatform } from '../context/PlatformContext';
-import { authColor, crmPillLabel, crmPillVariant, exportReport, scPillVariant } from './shared';
+import { authColor } from './shared';
 
 export function OverviewPage() {
   const navigate = useNavigate();
   const { openModal } = useModal();
-  const { showToast } = useToast();
   const followUp = useFollowUp();
+  const { can } = useRoleGates();
   const { overview, clients, charts, investigations, onboarding, doraQueue, loading } = usePlatform();
   const scanSeries = useMemo(
     () =>
@@ -139,19 +139,13 @@ export function OverviewPage() {
     <>
       <PageHeader
         title="Platform Overview"
-        subtitle="All clients · Live system health · May 12, 2026"
+        subtitle={`All clients · Live system health · ${new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}`}
         actions={
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button variant="secondary" size="sm" onClick={() => navigate('/reports')}>
-              📄 Reports
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Platform Overview')}>
-              ↓ Export
-            </Button>
+          can('onboard') ? (
             <Button className="bacc" size="sm" onClick={() => openModal('onboard')}>
               + Onboard Client
             </Button>
-          </div>
+          ) : undefined
         }
       />
 
@@ -212,11 +206,11 @@ export function OverviewPage() {
               <tr>
                 <th style={{ width: 32 }} />
                 <th>Client</th>
-                <th>Products</th>
+                <th>Product · Tier</th>
                 <th>Auth Rate</th>
-                <th>Health</th>
+                <th>Credits</th>
                 <th>Status</th>
-                <th />
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -232,10 +226,7 @@ export function OverviewPage() {
                     </div>
                   </td>
                   <td>
-                    <ProductPill variant={scPillVariant(c.scband)}>SC·{c.scband}</ProductPill>
-                    {crmPillVariant(c.crm) && crmPillLabel(c.crm) && (
-                      <ProductPill variant={crmPillVariant(c.crm)!}>{crmPillLabel(c.crm)}</ProductPill>
-                    )}
+                    <SubscriptionTierPills client={c} />
                   </td>
                   <td style={{ color: authColor(c.authRate), fontWeight: 600 }}>{c.authRate}</td>
                   <td>

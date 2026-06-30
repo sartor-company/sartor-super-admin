@@ -1,16 +1,18 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 export function FormGroup({
   label,
   children,
   hint,
+  style,
 }: {
   label?: string;
   children: ReactNode;
   hint?: ReactNode;
+  style?: CSSProperties;
 }) {
   return (
-    <div className="fg">
+    <div className="fg" style={style}>
       {label && <label className="fi">{label}</label>}
       {children}
       {hint && (

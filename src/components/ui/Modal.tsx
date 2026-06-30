@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 export function Modal({
   open,
@@ -50,9 +50,9 @@ export function Modal({
   );
 }
 
-export function ModalFooter({ children }: { children: ReactNode }) {
+export function ModalFooter({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14, ...style }}>
       {children}
     </div>
   );

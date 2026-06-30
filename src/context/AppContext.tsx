@@ -11,7 +11,10 @@ import {
 import type { Client } from '../data/clients';
 import { useAuthStore } from '../store/authStore';
 import type {
+  ActivateClientTarget,
   DoraLabelContext,
+  StickerDesignTarget,
+  StickerOrderTarget,
   InvestigationDetail,
   RoleId,
   TeamMemberEdit,
@@ -57,6 +60,18 @@ interface AppContextValue {
   notifyTeamReload: () => void;
   registerClientReload: (handler: (() => void) | null) => void;
   notifyClientReload: () => void;
+  activateTarget: ActivateClientTarget | null;
+  openActivateClient: (target: ActivateClientTarget) => void;
+  clearActivateClient: () => void;
+  stickerDesignTarget: StickerDesignTarget | null;
+  openStickerDesign: (target: StickerDesignTarget) => void;
+  clearStickerDesign: () => void;
+  triggerPinTarget: StickerOrderTarget | null;
+  openTriggerPinTarget: (target: StickerOrderTarget) => void;
+  clearTriggerPinTarget: () => void;
+  dispatchTarget: StickerOrderTarget | null;
+  openDispatchTarget: (target: StickerOrderTarget) => void;
+  clearDispatchTarget: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -85,6 +100,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [doraLabel, setDoraLabel] = useState<DoraLabelContext | null>(null);
   const [teamMemberClientId, setTeamMemberClientId] = useState<string | null>(null);
   const [teamMemberEdit, setTeamMemberEdit] = useState<TeamMemberEdit | null>(null);
+  const [activateTarget, setActivateTarget] = useState<ActivateClientTarget | null>(null);
+  const [stickerDesignTarget, setStickerDesignTarget] = useState<StickerDesignTarget | null>(null);
+  const [triggerPinTarget, setTriggerPinTarget] = useState<StickerOrderTarget | null>(null);
+  const [dispatchTarget, setDispatchTarget] = useState<StickerOrderTarget | null>(null);
   const noteHandlerRef = useRef<((text: string) => void) | null>(null);
   const teamReloadRef = useRef<(() => void) | null>(null);
   const clientReloadRef = useRef<(() => void) | null>(null);
@@ -167,6 +186,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clientReloadRef.current?.();
   }, []);
 
+  const openActivateClient = useCallback((target: ActivateClientTarget) => {
+    setActivateTarget(target);
+  }, []);
+
+  const clearActivateClient = useCallback(() => {
+    setActivateTarget(null);
+  }, []);
+
+  const openStickerDesign = useCallback((target: StickerDesignTarget) => {
+    setStickerDesignTarget(target);
+  }, []);
+
+  const clearStickerDesign = useCallback(() => {
+    setStickerDesignTarget(null);
+  }, []);
+
+  const openTriggerPinTarget = useCallback((target: StickerOrderTarget) => {
+    setTriggerPinTarget(target);
+  }, []);
+
+  const clearTriggerPinTarget = useCallback(() => {
+    setTriggerPinTarget(null);
+  }, []);
+
+  const openDispatchTarget = useCallback((target: StickerOrderTarget) => {
+    setDispatchTarget(target);
+  }, []);
+
+  const clearDispatchTarget = useCallback(() => {
+    setDispatchTarget(null);
+  }, []);
+
   const value = useMemo(
     () => ({
       role,
@@ -207,6 +258,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notifyTeamReload,
       registerClientReload,
       notifyClientReload,
+      activateTarget,
+      openActivateClient,
+      clearActivateClient,
+      stickerDesignTarget,
+      openStickerDesign,
+      clearStickerDesign,
+      triggerPinTarget,
+      openTriggerPinTarget,
+      clearTriggerPinTarget,
+      dispatchTarget,
+      openDispatchTarget,
+      clearDispatchTarget,
     }),
     [
       role,
@@ -242,6 +305,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notifyTeamReload,
       registerClientReload,
       notifyClientReload,
+      activateTarget,
+      openActivateClient,
+      clearActivateClient,
+      stickerDesignTarget,
+      openStickerDesign,
+      clearStickerDesign,
+      triggerPinTarget,
+      openTriggerPinTarget,
+      clearTriggerPinTarget,
+      dispatchTarget,
+      openDispatchTarget,
+      clearDispatchTarget,
     ],
   );
 

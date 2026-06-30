@@ -14,7 +14,8 @@ export type NavIconKey =
   | 'alert'
   | 'help'
   | 'doc'
-  | 'credit';
+  | 'credit'
+  | 'tag';
 
 export type ModalId =
   | 'onboard'
@@ -35,11 +36,46 @@ export type ModalId =
   | 'model-review'
   | 'upload-images'
   | 'assign'
-  | 'edit-client';
+  | 'edit-client'
+  | 'activate-client'
+  | 'sticker-design'
+  | 'sticker-order'
+  | 'trigger-pin'
+  | 'dispatch-order'
+  | 'download-package';
+
+export interface StickerOrderTarget {
+  _id: string;
+  orderId: string;
+  clientName: string;
+  batchRef: string;
+  qtyOrdered: number;
+  qtyWithOverage: number;
+  assignedPinName: string;
+  sku?: string;
+  adminId?: string;
+}
+
+export interface StickerDesignTarget {
+  adminId: string;
+  clientName: string;
+  clientCode?: string;
+}
+
+export interface ActivateClientTarget {
+  clientId: string;
+  code?: string;
+  name: string;
+  email: string;
+  products: string;
+  invoiceId?: string;
+  invoiceStatus?: string;
+}
 
 export type NavBadgeKey =
   | 'attentionClients'
   | 'onboarding'
+  | 'stickerOrders'
   | 'doraQueue'
   | 'investigations'
   | 'support';
@@ -138,6 +174,7 @@ export interface PlatformSettings {
   apiVersion: string;
   rateLimitPerMinute: number;
   webhookRetryCount: number;
+  aimlCanTriggerPin?: boolean;
   updatedAt?: number;
 }
 

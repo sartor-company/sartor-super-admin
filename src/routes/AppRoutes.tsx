@@ -18,6 +18,7 @@ import {
   ReportsPage,
   SettingsPage,
   SupportPage,
+  StickerOrdersPage,
 } from '../pages';
 
 export function AppRoutes() {
@@ -41,6 +42,7 @@ export function AppRoutes() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="ops" element={<OpsDashboardPage />} />
             <Route path="onboarding" element={<OnboardingPage />} />
+            <Route path="sticker-orders" element={<StickerOrdersPage />} />
             <Route path="am" element={<AmDashboardPage />} />
             <Route path="finance" element={<FinancePage />} />
             <Route path="aiml" element={<AimlDashboardPage />} />

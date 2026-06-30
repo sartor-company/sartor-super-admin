@@ -13,6 +13,12 @@ export interface PlatformInvoiceRow {
   issuedAt?: number;
   dueAt?: number;
   paidAt?: number;
+  lineItems?: { desc?: string; amt?: number; type?: string }[];
+  revenueType?: string;
+  revenueLabel?: string;
+  revenueVariant?: string;
+  lineCount?: number;
+  usdEquivalent?: number;
 }
 
 export function invoiceStatusVariant(status: string): BadgeVariant {
@@ -65,4 +71,22 @@ export function parseSeatsFromDescription(desc?: string): number | null {
   if (!desc) return null;
   const m = desc.match(/\((\d+)\s*seats?\)/i);
   return m ? Number(m[1]) : null;
+}
+
+export function revenueBadgeVariant(variant?: string): BadgeVariant {
+  const map: Record<string, BadgeVariant> = {
+    accent: 'bp',
+    ba: 'ba',
+    bgold: 'bgold',
+    bb: 'bb',
+    bg: 'bg',
+    bp: 'bp',
+    bx: 'bx',
+  };
+  return map[variant || ''] || 'bx';
+}
+
+export function formatUsd(ngnAmount: number, usdFromApi?: number): string {
+  const usd = usdFromApi ?? Math.round(ngnAmount * 0.00063);
+  return `$${usd.toLocaleString()}`;
 }

@@ -12,6 +12,7 @@ import { Card, CardHeader } from '../components/ui/Card';
 import type { Client } from '../data/clients';
 import { usePlatform } from '../context/PlatformContext';
 import { useFollowUp } from '../hooks/useFollowUp';
+import { useRoleGates } from '../hooks/useRoleGates';
 import { RevenueBarChart, RevenueDonutChart } from '../components/charts/AdminCharts';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
@@ -21,9 +22,11 @@ import {
   formatDueLabel,
   formatInvoiceAmount,
   formatInvoiceDate,
+  formatUsd,
   invoiceStatusVariant,
   isCreditSaleInvoice,
   parseSeatsFromDescription,
+  revenueBadgeVariant,
   type PlatformInvoiceRow,
 } from '../utils/financeDisplay';
 import { formatNaira } from '../utils/format';
@@ -34,10 +37,21 @@ import {
   revenueSeriesFromInvoices,
 } from '../utils/chartSeries';
 import { exportReport } from './shared';
+import { InvoiceDetailModal } from '../modals/InvoiceDetailModal';
 
-type FinTab = 'dash' | 'invoices' | 'crm' | 'credits';
+type FinTab = 'dash' | 'invoices' | 'crm' | 'credits' | 'scdora';
 
-const FIN_TAB_IDS: FinTab[] = ['dash', 'invoices', 'crm', 'credits'];
+const FIN_TAB_IDS: FinTab[] = ['dash', 'invoices', 'crm', 'credits', 'scdora'];
+
+const REVENUE_TYPE_OPTIONS = [
+  'All revenue types',
+  'Credit Bundles',
+  'CRM Subscriptions',
+  'SKU Licences',
+  'SC-DORA Deployment',
+  'Domains',
+  'Multiple',
+] as const;
 
 const finPanelStyle = (visible: boolean): CSSProperties =>
   visible ? {} : { display: 'none' };
@@ -48,6 +62,7 @@ export function FinancePage() {
   const { openModal } = useModal();
   const { showToast } = useToast();
   const followUp = useFollowUp();
+  const { can } = useRoleGates();
   const { clients, invoices, financeSummary, charts, loading, refresh } = usePlatform();
 
   const urlTab = searchParams.get('finTab') as FinTab | null;
@@ -57,6 +72,8 @@ export function FinancePage() {
 
   const [invQuery, setInvQuery] = useState('');
   const [invStatus, setInvStatus] = useState('');
+  const [invType, setInvType] = useState('All revenue types');
+  const [detailInvoice, setDetailInvoice] = useState<PlatformInvoiceRow | null>(null);
   const [crmClientId, setCrmClientId] = useState('');
   const [crmTierRate, setCrmTierRate] = useState('');
   const [crmSeats, setCrmSeats] = useState('');
@@ -77,12 +94,51 @@ export function FinancePage() {
   const invoiceRows = invoices as unknown as PlatformInvoiceRow[];
   const summary = financeSummary as {
     paidTotal?: number;
+    paidCount?: number;
+    arr?: number;
     mrr?: number;
+    crmMrr?: number;
+    crmArr?: number;
+    skuArr?: number;
     outstandingTotal?: number;
     overdueTotal?: number;
     pendingInvoices?: number;
     overdueInvoices?: number;
     crmSubscriptions?: number;
+    deferredRevenue?: number;
+    creditLiability?: number;
+    creditRevenueYtd?: number;
+    recurringYtd?: number;
+    oneTimeYtd?: number;
+    deploymentMix?: {
+      fullPaid?: number;
+      pilotPaid?: number;
+      convertPaid?: number;
+      pilotCount?: number;
+      fullCount?: number;
+      convertCount?: number;
+      pilotConvertRate?: number;
+    };
+    invoiceCounts?: { total?: number; paid?: number; pending?: number; overdue?: number };
+    crmSubscriptionRows?: {
+      clientName: string;
+      tier: string;
+      seats: number;
+      opSeats: number;
+      mrr: number;
+      arr: number;
+      billingCycle: string;
+      status: string;
+    }[];
+    scDoraEngagements?: {
+      clientName: string;
+      stage: string;
+      deploymentRevenue: number;
+      deploymentPaid: boolean;
+      skuLicenceArr: number;
+      status: string;
+      accountActivated: boolean;
+    }[];
   } | null;
 
   const filteredInvoices = useMemo(
@@ -95,9 +151,18 @@ export function FinancePage() {
             .toLowerCase()
             .includes(q);
         const okSt = !invStatus || row.status === invStatus;
-        return okQ && okSt;
+        const okType =
+          invType === 'All revenue types' ||
+          (invType === 'Credit Bundles' && row.revenueType === 'credits') ||
+          (invType === 'CRM Subscriptions' && row.revenueType === 'crm') ||
+          (invType === 'SKU Licences' && row.revenueType === 'sku') ||
+          (invType === 'SC-DORA Deployment' &&
+            ['scdora-full', 'scdora-pilot', 'scdora-convert'].includes(row.revenueType || '')) ||
+          (invType === 'Domains' && row.revenueType === 'domains') ||
+          (invType === 'Multiple' && row.revenueType === 'multiple');
+        return okQ && okSt && okType;
       }),
-    [invoiceRows, invQuery, invStatus],
+    [invoiceRows, invQuery, invStatus, invType],
   );
 
   const crmClients = useMemo(
@@ -181,10 +246,18 @@ export function FinancePage() {
     { id: 'invoices' as const, label: 'Invoices' },
     { id: 'crm' as const, label: 'CRM Subscriptions' },
     { id: 'credits' as const, label: 'SC Credit Sales' },
+    { id: 'scdora' as const, label: 'SC-DORA Engagements' },
   ];
 
-  const paidTotal = summary?.paidTotal ?? summary?.mrr ?? 0;
+  const paidTotal = summary?.paidTotal ?? 0;
   const outstanding = summary?.outstandingTotal ?? 0;
+  const mix = summary?.deploymentMix;
+  const crmRows = summary?.crmSubscriptionRows ?? [];
+  const scDoraRows = summary?.scDoraEngagements ?? [];
+  const recurringTotal = (summary?.recurringYtd ?? 0) + (summary?.oneTimeYtd ?? 0);
+  const recurringPct = recurringTotal
+    ? Math.round(((summary?.recurringYtd ?? 0) / recurringTotal) * 1000) / 10
+    : 0;
 
   const revenueSeries = useMemo(() => {
     const fromApi = revenueSeriesFromCharts(charts);
@@ -200,16 +273,18 @@ export function FinancePage() {
   return (
     <>
       <PageHeader
-        title="Finance Dashboard"
-        subtitle="Revenue, invoices, credits & CRM subscription management"
+        title="Finance"
+        subtitle="Collections, recurring revenue, invoices & credit economics · FY2026"
         actions={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button variant="secondary" size="sm" onClick={() => navigate('/reports')}>
+            <Button className="bacc" size="sm" onClick={() => navigate('/reports')}>
               📄 Full Reports
             </Button>
-            <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
-              + Create Invoice
-            </Button>
+            {can('invoice') && (
+              <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
+                + Create Invoice
+              </Button>
+            )}
           </div>
         }
       />
@@ -223,45 +298,61 @@ export function FinancePage() {
       <div id="fin-dash" data-g="fin-tabs" style={finPanelStyle(isActive('dash'))}>
         <KCardGrid columns={4}>
           <KCard
-            label="Total collected"
+            label="Total Collected (YTD)"
             value={formatNaira(paidTotal)}
-            trend={`${invoiceRows.filter((i) => i.status === 'Paid').length} paid invoices`}
+            trend={`${summary?.paidCount ?? invoiceRows.filter((i) => i.status === 'Paid').length} paid invoices`}
             trendType="up"
             accent
             valueStyle={{ fontSize: 20 }}
           />
           <KCard
-            label="CRM subscriptions"
-            value={String(summary?.crmSubscriptions ?? crmClients.length)}
-            trend="Active CRM clients"
+            label="ARR (recurring)"
+            value={formatNaira(summary?.arr ?? 0)}
+            trend="CRM + SKU licences"
             trendType="up"
             valueStyle={{ fontSize: 20 }}
           />
           <KCard
-            label="Outstanding invoices"
+            label="MRR"
+            value={formatNaira(summary?.mrr ?? summary?.crmMrr ?? 0)}
+            trend={`${summary?.crmSubscriptions ?? crmClients.length} active subscriptions`}
+            trendType="up"
+            valueStyle={{ fontSize: 20 }}
+          />
+          <KCard
+            label="Outstanding"
             value={formatNaira(outstanding)}
-            trend={`${summary?.pendingInvoices ?? 0} pending · ${summary?.overdueInvoices ?? 0} overdue`}
+            trend={`${summary?.pendingInvoices ?? 0} invoices`}
             trendType="dn"
             valueStyle={{ fontSize: 20, color: 'var(--at)' }}
           />
+        </KCardGrid>
+        <KCardGrid columns={3}>
           <KCard
-            label="Overdue amount"
+            label="Overdue"
             value={formatNaira(summary?.overdueTotal ?? 0)}
-            trend={`${summary?.overdueInvoices ?? 0} invoices`}
+            trend={`${summary?.overdueInvoices ?? 0} invoices · chase`}
             trendType="dn"
+            valueStyle={{ fontSize: 20, color: 'var(--rt)' }}
+          />
+          <KCard
+            label="Deferred Revenue"
+            value={formatNaira(summary?.deferredRevenue ?? 0)}
+            trend="CRM annual prepay"
+            trendType="neu"
+            valueStyle={{ fontSize: 20 }}
+          />
+          <KCard
+            label="Credit Liability"
+            value={formatNaira(summary?.creditLiability ?? 0)}
+            trend="Unredeemed balance"
+            trendType="neu"
             valueStyle={{ fontSize: 20 }}
           />
         </KCardGrid>
         <div className="r3" style={{ marginBottom: 14 }}>
           <Card style={{ marginBottom: 0 }}>
-            <CardHeader
-              title="Revenue by month — 2026"
-              action={
-                <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Revenue', 'csv')}>
-                  ↓ CSV
-                </Button>
-              }
-            />
+            <CardHeader title="Revenue by month — 2026" />
             {isActive('dash') && (
               <RevenueBarChart
                 height={190}
@@ -283,33 +374,121 @@ export function FinancePage() {
             <DonutLegend items={donutSeries.legend} marginTop={7} />
           </Card>
         </div>
+        <Card style={{ marginBottom: 14 }}>
+          <CardHeader title="SC-DORA deployment mix & pilot funnel" />
+          <KCardGrid columns={4}>
+            <KCard
+              label="Full Deployment"
+              value={formatNaira(mix?.fullPaid ?? 0)}
+              trend={`${mix?.fullCount ?? 0} clients`}
+              trendType="up"
+              valueStyle={{ fontSize: 18 }}
+            />
+            <KCard
+              label="Pilot Deployment"
+              value={formatNaira(mix?.pilotPaid ?? 0)}
+              trend={`${mix?.pilotCount ?? 0} active pilots`}
+              trendType="neu"
+              valueStyle={{ fontSize: 18, color: 'var(--at)' }}
+            />
+            <KCard
+              label="Pilot → Full Convert"
+              value={formatNaira(mix?.convertPaid ?? 0)}
+              trend={`${mix?.convertCount ?? 0} conversions`}
+              trendType="up"
+              valueStyle={{ fontSize: 18, color: 'var(--gold)' }}
+            />
+            <KCard
+              label="Pilot → Full Rate"
+              value={`${mix?.pilotConvertRate ?? 0}%`}
+              trend="Conversion rate"
+              trendType="up"
+              accent
+              valueStyle={{ fontSize: 18 }}
+            />
+          </KCardGrid>
+        </Card>
+        <Card style={{ marginBottom: 14 }}>
+          <CardHeader title="Recurring vs one-time — collected YTD" />
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                <span style={{ color: 'var(--text2)' }}>Recurring (CRM subscriptions)</span>
+                <strong>
+                  {formatNaira(summary?.recurringYtd ?? 0)} · {recurringPct}%
+                </strong>
+              </div>
+              <div style={{ height: 9, background: 'var(--bg2)', borderRadius: 5, overflow: 'hidden', marginBottom: 12 }}>
+                <div style={{ width: `${recurringPct}%`, height: '100%', background: 'var(--navy)' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                <span style={{ color: 'var(--text2)' }}>One-time (deployment, setup, credits)</span>
+                <strong>
+                  {formatNaira(summary?.oneTimeYtd ?? 0)} · {100 - recurringPct}%
+                </strong>
+              </div>
+              <div style={{ height: 9, background: 'var(--bg2)', borderRadius: 5, overflow: 'hidden' }}>
+                <div style={{ width: `${100 - recurringPct}%`, height: '100%', background: 'var(--accent)' }} />
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
 
       <div id="fin-invoices" data-g="fin-tabs" style={finPanelStyle(isActive('invoices'))}>
         <div className="ch" style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="ct">All invoices</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <input
               className="inp"
-              style={{ width: 220 }}
+              style={{ width: 220, fontSize: 12 }}
               placeholder="Search invoice or client..."
               value={invQuery}
               onChange={(e) => setInvQuery(e.target.value)}
             />
-            <select className="inp" style={{ width: 140 }} value={invStatus} onChange={(e) => setInvStatus(e.target.value)}>
+            <select className="inp" style={{ width: 140, fontSize: 12 }} value={invStatus} onChange={(e) => setInvStatus(e.target.value)}>
               <option value="">All Statuses</option>
               <option value="Overdue">Overdue</option>
               <option value="Due Soon">Due Soon</option>
               <option value="Pending">Pending</option>
               <option value="Paid">Paid</option>
             </select>
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Invoices', 'csv')}>
-              ↓ Export CSV
-            </Button>
-            <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
-              + New Invoice
-            </Button>
+            <select className="inp" style={{ width: 160, fontSize: 12 }} value={invType} onChange={(e) => setInvType(e.target.value)}>
+              {REVENUE_TYPE_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <select
+              className="inp"
+              style={{ maxWidth: 140, fontSize: 12 }}
+              defaultValue=""
+              onChange={(e) => {
+                const v = e.target.value;
+                e.target.value = '';
+                if (v === 'csv') {
+                  exportReport(showToast, 'Invoices', {
+                    headers: ['Invoice', 'Client', 'Description', 'Amount', 'Status'],
+                    rows: filteredInvoices.map((r) => [
+                      r.invoiceId,
+                      r.clientName || '',
+                      r.description || '',
+                      String(r.amount),
+                      r.status || '',
+                    ]),
+                  });
+                }
+              }}
+            >
+              <option value="">↓ Export…</option>
+              <option value="csv">CSV (.csv)</option>
+            </select>
+            {can('invoice') && (
+              <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
+                + Create Invoice
+              </Button>
+            )}
           </div>
         </div>
         <Card>
@@ -321,9 +500,9 @@ export function FinancePage() {
                 <tr>
                   <th>Invoice</th>
                   <th>Client</th>
-                  <th>Description</th>
-                  <th>Amount</th>
-                  <th>Issued</th>
+                  <th>Revenue Type</th>
+                  <th>NGN</th>
+                  <th>USD Eq.</th>
                   <th>Due</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -334,9 +513,18 @@ export function FinancePage() {
                   <tr key={row._id}>
                     <td style={{ fontFamily: "'DM Mono', monospace", fontSize: 11 }}>{row.invoiceId}</td>
                     <td>{row.clientName || row.clientCode || '—'}</td>
-                    <td>{row.description || '—'}</td>
+                    <td>
+                      <Badge variant={revenueBadgeVariant(row.revenueVariant)}>{row.revenueLabel || '—'}</Badge>
+                      {(row.lineCount ?? 0) > 1 && (
+                        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+                          {row.lineCount} lines
+                        </div>
+                      )}
+                    </td>
                     <td>{formatInvoiceAmount(row.amount)}</td>
-                    <td>{formatInvoiceDate(row.issuedAt)}</td>
+                    <td style={{ color: 'var(--text3)', fontSize: 11 }}>
+                      {formatUsd(row.amount, row.usdEquivalent)}
+                    </td>
                     <td style={{ color: row.status === 'Overdue' ? 'var(--rt)' : undefined }}>
                       {formatDueLabel(row.dueAt, row.status)}
                     </td>
@@ -344,7 +532,11 @@ export function FinancePage() {
                       <Badge variant={invoiceStatusVariant(row.status)}>{row.status}</Badge>
                     </td>
                     <td>
-                      {row.status === 'Overdue' && (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        <Button variant="secondary" size="sm" onClick={() => setDetailInvoice(row)}>
+                          View
+                        </Button>
+                        {row.status === 'Overdue' && (
                         <Button
                           variant="danger"
                           size="sm"
@@ -374,18 +566,14 @@ export function FinancePage() {
                           Remind
                         </Button>
                       )}
-                      {row.status === 'Pending' && (
+                      {row.status === 'Pending' && can('invoice') && (
                         <div style={{ display: 'flex', gap: 4 }}>
                           <Button variant="success" size="sm" onClick={() => markPaid(row)}>
                             Mark Paid
                           </Button>
                         </div>
                       )}
-                      {row.status === 'Paid' && (
-                        <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, `${row.invoiceId} Receipt`)}>
-                          Receipt
-                        </Button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -396,19 +584,40 @@ export function FinancePage() {
       </div>
 
       <div id="fin-crm" data-g="fin-tabs" style={finPanelStyle(isActive('crm'))}>
+        <KCardGrid columns={3}>
+          <KCard
+            label="CRM MRR"
+            value={formatNaira(summary?.crmMrr ?? 0)}
+            trend={`${crmRows.length || crmClients.length} active subscriptions`}
+            trendType="up"
+            accent
+            valueStyle={{ fontSize: 20 }}
+          />
+          <KCard
+            label="CRM ARR"
+            value={formatNaira(summary?.crmArr ?? 0)}
+            trend="Annualised recurring"
+            trendType="up"
+            valueStyle={{ fontSize: 20 }}
+          />
+          <KCard
+            label="Avg Revenue / Sub"
+            value={
+              crmRows.length
+                ? `${formatNaira(Math.round((summary?.crmMrr ?? 0) / crmRows.length))}/mo`
+                : '—'
+            }
+            trend="Across active CRM clients"
+            trendType="neu"
+            valueStyle={{ fontSize: 20 }}
+          />
+        </KCardGrid>
         <InfoBanner>
-          ℹ CRM tiers: SN ₦5,000 · Sales Nav+ ₦12,000 · CRM 360 ₦25,000 per seat/month. Annual billing at 20% discount.
+          ℹ MRR/ARR are recognised on active-contract basis. Deployment fees and credit bundles are one-time — see Dashboard for collected cash.
         </InfoBanner>
         <Card>
-          <CardHeader
-            title="Active CRM subscriptions"
-            action={
-              <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'CRM Subscriptions', 'csv')}>
-                ↓ CSV
-              </Button>
-            }
-          />
-          {crmClients.length === 0 ? (
+          <CardHeader title="Active CRM subscriptions" />
+          {crmRows.length === 0 && crmClients.length === 0 ? (
             <p style={{ color: 'var(--text3)', fontSize: 13 }}>No active CRM subscriptions.</p>
           ) : (
             <table>
@@ -416,44 +625,54 @@ export function FinancePage() {
                 <tr>
                   <th>Client</th>
                   <th>Tier</th>
-                  <th>Est. seats</th>
-                  <th>Rate</th>
-                  <th>Monthly est.</th>
+                  <th>Seats</th>
+                  <th>MRR</th>
+                  <th>ARR</th>
+                  <th>Billing</th>
                   <th>Status</th>
-                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {crmClients.map((c) => {
-                  const rate = crmSeatRate(c.crm);
-                  const seats =
-                    parseSeatsFromDescription(
-                      invoiceRows.find((i) => i.clientCode === c.code && i.description?.includes('CRM'))
-                        ?.description,
-                    ) ?? '—';
-                  const seatNum = typeof seats === 'number' ? seats : 0;
-                  const crmVar = crmPillVariant(c.crm);
-                  const crmLbl = crmPillLabel(c.crm);
-                  return (
-                    <tr key={c.code}>
-                      <td>
-                        <strong>{c.name}</strong>
-                      </td>
-                      <td>{crmVar && crmLbl && <ProductPill variant={crmVar}>{crmLbl}</ProductPill>}</td>
-                      <td>{seats}</td>
-                      <td>{rate ? `${formatNaira(rate)}/seat/month` : '—'}</td>
-                      <td style={{ fontWeight: 600 }}>{seatNum ? formatNaira(rate * seatNum) : '—'}</td>
-                      <td>
-                        <Badge variant={c.status === 'Attention' ? 'ba' : 'bg'}>{c.status}</Badge>
-                      </td>
-                      <td>
-                        <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
-                          Invoice
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {(crmRows.length
+                  ? crmRows.map((r) => (
+                      <tr key={r.clientName}>
+                        <td>
+                          <strong>{r.clientName}</strong>
+                        </td>
+                        <td>{r.tier}</td>
+                        <td>
+                          {r.seats}
+                          {r.opSeats ? ` + ${r.opSeats} op` : ''}
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{formatNaira(r.mrr)}</td>
+                        <td>{formatNaira(r.arr)}</td>
+                        <td>{r.billingCycle}</td>
+                        <td>
+                          <Badge variant={r.status === 'Attention' ? 'ba' : 'bg'}>{r.status}</Badge>
+                        </td>
+                      </tr>
+                    ))
+                  : crmClients.map((c) => {
+                      const rate = crmSeatRate(c.crm);
+                      const seats = c.crmSeats ?? '—';
+                      const seatNum = typeof seats === 'number' ? seats : 0;
+                      const mrr = seatNum ? rate * seatNum : 0;
+                      return (
+                        <tr key={c.code}>
+                          <td>
+                            <strong>{c.name}</strong>
+                          </td>
+                          <td>{crmPillLabel(c.crm)}</td>
+                          <td>{seats}</td>
+                          <td style={{ fontWeight: 600 }}>{mrr ? formatNaira(mrr) : '—'}</td>
+                          <td>{mrr ? formatNaira(mrr * 12) : '—'}</td>
+                          <td>Monthly</td>
+                          <td>
+                            <Badge variant={c.status === 'Attention' ? 'ba' : 'bg'}>{c.status}</Badge>
+                          </td>
+                        </tr>
+                      );
+                    }))}
               </tbody>
             </table>
           )}
@@ -512,9 +731,11 @@ export function FinancePage() {
             </div>
           )}
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button className="bacc" size="sm" disabled={saving} onClick={() => saveCrmSubscription(true)}>
-              Save Subscription & Create Invoice
-            </Button>
+            {can('invoice') && (
+              <Button className="bacc" size="sm" disabled={saving} onClick={() => saveCrmSubscription(true)}>
+                Save Subscription & Create Invoice
+              </Button>
+            )}
             <Button className="bsec" size="sm" disabled={saving} onClick={() => saveCrmSubscription(false)}>
               Save Without Invoice
             </Button>
@@ -523,15 +744,39 @@ export function FinancePage() {
       </div>
 
       <div id="fin-credits" data-g="fin-tabs" style={finPanelStyle(isActive('credits'))}>
-        <Card>
-          <CardHeader
-            title="SartorChain credit bundle sales"
-            action={
-              <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Credit Sales', 'csv')}>
-                ↓ CSV
-              </Button>
-            }
+        <KCardGrid columns={4}>
+          <KCard
+            label="Credit Revenue (YTD, paid)"
+            value={formatNaira(summary?.creditRevenueYtd ?? 0)}
+            trend={`${creditSales.filter((i) => i.status === 'Paid').length} bundles sold`}
+            trendType="up"
+            accent
+            valueStyle={{ fontSize: 20 }}
           />
+          <KCard
+            label="Credit Liability"
+            value={formatNaira(summary?.creditLiability ?? 0)}
+            trend="Unredeemed balance"
+            trendType="neu"
+            valueStyle={{ fontSize: 20 }}
+          />
+          <KCard
+            label="Breakage (YTD)"
+            value={formatNaira(0)}
+            trend="Credits protected on lapse"
+            trendType="up"
+            valueStyle={{ fontSize: 20, color: 'var(--gt)' }}
+          />
+          <KCard
+            label="Open credit invoices"
+            value={String(creditSales.filter((i) => i.status !== 'Paid').length)}
+            trend="Pending / overdue"
+            trendType="dn"
+            valueStyle={{ fontSize: 20 }}
+          />
+        </KCardGrid>
+        <Card>
+          <CardHeader title="SartorChain credit bundle sales" />
           {creditSales.length === 0 ? (
             <p style={{ color: 'var(--text3)', fontSize: 13 }}>No credit sales invoices yet.</p>
           ) : (
@@ -570,11 +815,103 @@ export function FinancePage() {
           <InfoBanner>
             Create an invoice with SMS, PIN, batch, or calibration in the description — credits are applied automatically on Paystack payment when configured.
           </InfoBanner>
-          <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
-            Create credit sale invoice
-          </Button>
+          {can('invoice') && (
+            <Button className="bacc" size="sm" onClick={() => openModal('invoice')}>
+              Create credit sale invoice
+            </Button>
+          )}
         </Card>
       </div>
+
+      <div id="fin-scdora" data-g="fin-tabs" style={finPanelStyle(isActive('scdora'))}>
+        <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>
+          SC-DORA combines deployment fees, SKU annual licences (Year 2+), and consumable credit bundles. This view
+          tracks engagement stage and recurring SKU-licence ARR.
+        </p>
+        <KCardGrid columns={4}>
+          <KCard
+            label="Active Full Deployments"
+            value={String(mix?.fullCount ?? 0)}
+            trend="Committed clients"
+            trendType="up"
+            accent
+            valueStyle={{ fontSize: 20 }}
+          />
+          <KCard
+            label="Active Pilots"
+            value={String(mix?.pilotCount ?? 0)}
+            trend="90-day trials"
+            trendType="neu"
+            valueStyle={{ fontSize: 20, color: 'var(--at)' }}
+          />
+          <KCard
+            label="Pilot → Full Rate"
+            value={`${mix?.pilotConvertRate ?? 0}%`}
+            trend={`${mix?.convertCount ?? 0} conversions`}
+            trendType="up"
+            valueStyle={{ fontSize: 20 }}
+          />
+          <KCard
+            label="SKU Licence ARR"
+            value={formatNaira(summary?.skuArr ?? 0)}
+            trend="Recurring (Yr 2+)"
+            trendType="up"
+            valueStyle={{ fontSize: 20 }}
+          />
+        </KCardGrid>
+        <Card>
+          <CardHeader title="SC-DORA engagements by client" />
+          {scDoraRows.length === 0 ? (
+            <p style={{ color: 'var(--text3)', fontSize: 13 }}>No SC-DORA engagements yet.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Stage</th>
+                  <th>Deployment Revenue</th>
+                  <th>SKU Licence ARR</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scDoraRows.map((row) => (
+                  <tr key={row.clientName}>
+                    <td>
+                      <strong>{row.clientName}</strong>
+                    </td>
+                    <td>{row.stage}</td>
+                    <td>
+                      {row.deploymentRevenue ? (
+                        <>
+                          {formatNaira(row.deploymentRevenue)}{' '}
+                          <span style={{ color: row.deploymentPaid ? 'var(--gt)' : 'var(--at)', fontSize: 11 }}>
+                            {row.deploymentPaid ? 'paid' : 'pending'}
+                          </span>
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td>{row.skuLicenceArr ? formatNaira(row.skuLicenceArr) : '—'}</td>
+                    <td>
+                      <Badge variant={row.status === 'Attention' ? 'ba' : row.accountActivated ? 'bg' : 'bx'}>
+                        {row.accountActivated ? row.status : 'Onboarding'}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      </div>
+
+      <InvoiceDetailModal
+        invoice={detailInvoice}
+        open={!!detailInvoice}
+        onClose={() => setDetailInvoice(null)}
+      />
     </>
   );
 }

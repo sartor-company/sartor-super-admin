@@ -2,11 +2,11 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { MonoCell } from '../patterns/MonoCell';
-import { INVESTIGATIONS, severityBadge, type InvestigationRow } from '../../data/investigations';
+import { severityBadge, type InvestigationRow } from '../../data/investigations';
 import { useApp } from '../../context/AppContext';
 import { useModal } from '../../context/ModalContext';
 
-export function InvestigationsTable({ rows = INVESTIGATIONS }: { rows?: InvestigationRow[] }) {
+export function InvestigationsTable({ rows = [] }: { rows?: InvestigationRow[] }) {
   const { openInvestigation, openInvestigationAssign } = useApp();
   const { openModal } = useModal();
 

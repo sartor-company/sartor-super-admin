@@ -5,16 +5,11 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { KCard, KCardGrid } from '../components/ui/KCard';
 import { usePlatform } from '../context/PlatformContext';
-import { useModal } from '../context/ModalContext';
-import { useToast } from '../context/ToastContext';
 import type { Client } from '../data/clients';
 import type { DoraQueueRow } from '../types/dora';
-import { exportReport } from './shared';
 
 export function AimlDashboardPage() {
   const navigate = useNavigate();
-  const { openModal } = useModal();
-  const { showToast } = useToast();
   const { doraStats, doraQueue, clients, loading } = usePlatform();
 
   const stats = doraStats as {
@@ -45,11 +40,8 @@ export function AimlDashboardPage() {
       <div className="pghead">
         <div>
           <div className="pgtitle">DORA AI Dashboard</div>
-          <div className="pgsub">Model training & performance · Internal only</div>
+          <div className="pgsub">Model training queue & performance</div>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'DORA Performance')}>
-          ↓ Export
-        </Button>
       </div>
 
       {loading && !stats && (
@@ -66,9 +58,6 @@ export function AimlDashboardPage() {
       <Card>
         <div className="ch">
           <div className="ct">Client DORA footprint</div>
-          <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Client DORA')}>
-            ↓ Export
-          </Button>
         </div>
         <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
           SKUs and batches per client from live platform data.
@@ -97,17 +86,12 @@ export function AimlDashboardPage() {
                   <td>{r.batches}</td>
                   <td style={{ fontWeight: 600 }}>{r.authRate}</td>
                   <td>
-                    <Badge variant={r.status === 'Attention' ? 'ba' : 'bg'}>{r.status}</Badge>
+                    <Badge variant={r.status === 'Active' ? 'bg' : 'ba'}>{r.status}</Badge>
                   </td>
                   <td>
                     <Button variant="secondary" size="sm" onClick={() => navigate(`/clients/${r.code}`)}>
-                      Detail
+                      View
                     </Button>
-                    {r.status === 'Attention' && (
-                      <Button variant="danger" size="sm" onClick={() => openModal('model-review')}>
-                        Review
-                      </Button>
-                    )}
                   </td>
                 </tr>
               ))}

@@ -10,7 +10,6 @@ import { usePlatform } from '../context/PlatformContext';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
-import { exportReport } from '../utils/exportReport';
 import { platformApi } from '../api/platform';
 
 type ApiTicket = {
@@ -51,12 +50,13 @@ export function SupportPage() {
 
   const ticketStats = useMemo(() => {
     const open = rows.filter((t) => ['Open', 'In Progress'].includes(String(t.status || '')));
-    const p1 = open.filter((t) => t.priority === 'P1').length;
-    return { open: open.length, p1 };
+    const escalated = open.filter((t) => (t as { escalated?: boolean }).escalated).length;
+    const resolved = rows.filter((t) => ['Resolved', 'Closed'].includes(String(t.status || '')));
+    return { open: open.length, escalated, resolved: resolved.length };
   }, [rows]);
 
-  const openInvestigations = useMemo(
-    () => investigations.filter((i) => i.status !== 'Closed').length,
+  const p1Investigations = useMemo(
+    () => investigations.filter((i) => i.severity === 'P1' && i.status !== 'Closed').length,
     [investigations],
   );
 
@@ -107,23 +107,30 @@ export function SupportPage() {
         title="Support Dashboard"
         subtitle="Open tickets · Client lookup · Issue escalation"
         actions={
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Support Report')}>
-              ↓ Export
-            </Button>
-            <Button className="bacc" size="sm" onClick={() => openModal('ticket')}>
-              + Log Ticket
-            </Button>
-          </div>
+          <Button className="bacc" size="sm" onClick={() => openModal('ticket')}>
+            + Log Ticket
+          </Button>
         }
       />
 
       <KCardGrid columns={4}>
-        <KCard label="Open Tickets" value={String(ticketStats.open)} trend={`${ticketStats.p1} P1`} trendType="dn" accent />
-        <KCard label="Total Tickets" value={String(rows.length)} trend="All time" trendType="neu" />
-        <KCard label="Resolved / Closed" value={String(rows.length - ticketStats.open)} trend="Live" trendType="up" />
+        <KCard
+          label="Open Tickets"
+          value={String(ticketStats.open)}
+          trend={ticketStats.escalated > 0 ? `${ticketStats.escalated} escalated` : 'Live'}
+          trendType="dn"
+          accent
+        />
+        <KCard label="Resolved Today" value={String(ticketStats.resolved)} trend="Closed tickets" trendType="up" />
+        <KCard label="Avg Resolution Time" value="—" trend="Live data pending" trendType="neu" />
         <div style={{ cursor: 'pointer' }} onClick={() => navigate('/investigations')} role="presentation">
-          <KCard label="Open Investigations" value={String(openInvestigations)} trend="Click to review" trendType="dn" />
+          <KCard
+            label="P1 Investigations"
+            value={String(p1Investigations)}
+            trend="Requires attention"
+            trendType="dn"
+            valueStyle={{ color: 'var(--rt)' }}
+          />
         </div>
       </KCardGrid>
 
@@ -131,8 +138,8 @@ export function SupportPage() {
         <CardHeader
           title="Open support tickets"
           action={
-            <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Support Tickets')}>
-              ↓ Export
+            <Button variant="secondary" size="sm" onClick={() => showToast('Showing resolved tickets…', 'success')}>
+              View All Resolved
             </Button>
           }
         />

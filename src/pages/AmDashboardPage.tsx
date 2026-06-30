@@ -5,13 +5,12 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { ClientAvatar } from '../components/ui/ClientAvatar';
 import { KCard, KCardGrid } from '../components/ui/KCard';
-import { ProductPill } from '../components/ui/ProductPill';
 import type { Client } from '../data/clients';
 import { usePlatform } from '../context/PlatformContext';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useToast } from '../context/ToastContext';
 import { useAuthStore } from '../store/authStore';
-import { authColor, crmPillLabel, crmPillVariant, exportReport, scPillVariant } from './shared';
+import { amTierLabel, authColor, clientsForAccountManager } from '../utils/clientDisplay';
 
 export function AmDashboardPage() {
   const navigate = useNavigate();
@@ -20,17 +19,29 @@ export function AmDashboardPage() {
   const user = useAuthStore((s) => s.user);
   const { clients, loading } = usePlatform();
 
-  const portfolio = clients as Client[];
+  const portfolio = useMemo(
+    () => clientsForAccountManager(clients as Client[], user?.fullName),
+    [clients, user?.fullName],
+  );
 
   const stats = useMemo(() => {
-    const attention = portfolio.filter((c) => c.status === 'Attention').length;
+    const attention = portfolio.filter(
+      (c) =>
+        c.status === 'Attention' ||
+        c.creditHealth.variant === 'br' ||
+        c.creditHealth.variant === 'ba',
+    ).length;
     const rates = portfolio
       .map((c) => parseFloat(c.authRate))
       .filter((n) => !Number.isNaN(n));
     const avgAuth = rates.length
       ? `${(rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(1)}%`
       : '—';
-    const renewals = portfolio.filter((c) => c.status === 'Active').length;
+    const renewals = portfolio.filter((c) => {
+      if (!c.nextRenewalAt) return false;
+      const diff = (c.nextRenewalAt - Date.now()) / 86400000;
+      return diff >= 0 && diff <= 30;
+    }).length;
     return { attention, avgAuth, renewals };
   }, [portfolio]);
 
@@ -44,9 +55,6 @@ export function AmDashboardPage() {
             {portfolio.length === 1 ? '' : 's'}
           </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => navigate('/reports')}>
-          📄 My Reports
-        </Button>
       </div>
 
       {loading && portfolio.length === 0 && (
@@ -54,18 +62,21 @@ export function AmDashboardPage() {
       )}
 
       <KCardGrid columns={4}>
-        <KCard label="Active Clients" value={String(portfolio.length)} />
-        <KCard label="Requiring Attention" value={String(stats.attention)} trend="Low credits / status" trendType="dn" />
+        <KCard label="My Active Clients" value={String(portfolio.length)} />
+        <KCard
+          label="Requiring Attention"
+          value={String(stats.attention)}
+          trend="Credits low"
+          trendType="dn"
+          valueStyle={stats.attention > 0 ? { color: 'var(--at)' } : undefined}
+        />
         <KCard label="Avg Auth Rate" value={stats.avgAuth} trend="Portfolio average" trendType="up" />
-        <KCard label="Active accounts" value={String(stats.renewals)} trend="Status Active" trendType="neu" />
+        <KCard label="Open Renewals (30d)" value={String(stats.renewals)} trend="SKU licences" trendType="neu" />
       </KCardGrid>
 
       <Card>
         <div className="ch">
           <div className="ct">My client portfolio</div>
-          <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Portfolio Summary')}>
-            ↓ Export
-          </Button>
         </div>
         {portfolio.length === 0 ? (
           <p style={{ color: 'var(--text3)', fontSize: 13 }}>No clients assigned to your account yet.</p>
@@ -75,19 +86,23 @@ export function AmDashboardPage() {
               <tr>
                 <th style={{ width: 32 }} />
                 <th>Client</th>
-                <th>Products</th>
+                <th>Tier</th>
                 <th>Auth Rate</th>
                 <th>Credit Health</th>
-                <th>Industry</th>
+                <th>Next Renewal</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {portfolio.map((c) => {
-                const crmVar = crmPillVariant(c.crm);
-                const crmLbl = crmPillLabel(c.crm);
-                const needsFollowUp = c.status === 'Attention';
+                const needsFollowUp =
+                  c.status === 'Attention' ||
+                  c.creditHealth.variant === 'br' ||
+                  (c.creditHealth.variant === 'ba' && c.creditHealth.label.toLowerCase().includes('sms'));
+                const urgent =
+                  c.creditHealth.variant === 'br' ||
+                  (c.creditHealth.label.toLowerCase().includes('pin') && c.creditHealth.variant === 'ba');
                 return (
                   <tr key={c.code} className="cl" onClick={() => navigate(`/clients/${c.code}`)}>
                     <td>
@@ -95,29 +110,42 @@ export function AmDashboardPage() {
                     </td>
                     <td>
                       <strong>{c.name}</strong>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+                        {c.location?.split('·')[0]?.trim() || c.location} · {c.skus} SKUs
+                      </div>
                     </td>
                     <td>
-                      <ProductPill variant={scPillVariant(c.scband)}>SC·{c.scband}</ProductPill>
-                      {crmVar && crmLbl && <ProductPill variant={crmVar}>{crmLbl}</ProductPill>}
+                      <Badge variant="bgold">{amTierLabel(c)}</Badge>
                     </td>
                     <td style={{ color: authColor(c.authRate), fontWeight: 600 }}>{c.authRate}</td>
                     <td>
                       <Badge variant={c.creditHealth.variant}>{c.creditHealth.label}</Badge>
                     </td>
-                    <td>{c.industry}</td>
+                    <td>{c.nextRenewal ?? '—'}</td>
                     <td>
                       <Badge variant={c.status === 'Attention' ? 'ba' : c.status === 'Onboarding' ? 'bb' : 'bg'}>
                         {c.status}
                       </Badge>
                     </td>
                     <td>
-                      {needsFollowUp ? (
+                      {urgent ? (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            showToast('Flagged as urgent.', 'success');
+                          }}
+                        >
+                          Urgent
+                        </Button>
+                      ) : needsFollowUp ? (
                         <Button
                           className="bacc"
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            followUp(c.name, `${c.creditHealth.label} — please review credits.`, c._id);
+                            followUp(c.name, `${c.creditHealth.label} — please review.`, c._id);
                           }}
                         >
                           Follow Up

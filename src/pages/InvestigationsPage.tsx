@@ -4,12 +4,9 @@ import { FilterBar, FilterSelect, PageHeader, SearchInput } from '../components/
 import { InvestigationsTable } from '../components/tables/InvestigationsTable';
 import { usePlatform } from '../context/PlatformContext';
 import { useModal } from '../context/ModalContext';
-import { useToast } from '../context/ToastContext';
-import { exportReport } from '../utils/exportReport';
 
 export function InvestigationsPage() {
   const { openModal } = useModal();
-  const { showToast } = useToast();
   const { investigations } = usePlatform();
   const [query, setQuery] = useState('');
   const [severity, setSeverity] = useState('');
@@ -35,31 +32,9 @@ export function InvestigationsPage() {
         title="Investigations"
         subtitle="Counterfeit & batch mismatch cases · P1/P2/P3 severity"
         actions={
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() =>
-                exportReport(showToast, 'investigations', {
-                  headers: ['ID', 'Client', 'Batch', 'Severity', 'Status', 'Assigned', 'Opened'],
-                  rows: filtered.map((r) => [
-                    r.id,
-                    r.client,
-                    r.batch,
-                    r.severity,
-                    r.status,
-                    r.assigned,
-                    r.opened,
-                  ]),
-                })
-              }
-            >
-              ↓ Export
-            </Button>
-            <Button variant="danger" size="sm" onClick={() => openModal('new-investigation')}>
-              + Log Investigation
-            </Button>
-          </div>
+          <Button variant="danger" size="sm" onClick={() => openModal('new-investigation')}>
+            + Log Investigation
+          </Button>
         }
       />
       <FilterBar>

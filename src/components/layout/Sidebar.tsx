@@ -21,12 +21,12 @@ function navIsActive(path: string, finTab: string | undefined, pathname: string,
 export function Sidebar() {
   const { role, sidebarOpen, closeSidebar } = useApp();
   const user = useAuthStore((s) => s.user);
-  const { clients, onboarding, doraQueue, investigations, tickets } = usePlatform();
+  const { clients, onboarding, stickerOrders, doraQueue, investigations, tickets } = usePlatform();
   const config = ROLES[role];
   const { pathname, search } = useLocation();
   const navBadges = useMemo(
-    () => computeNavBadges({ clients, onboarding, investigations, doraQueue, tickets }),
-    [clients, onboarding, investigations, doraQueue, tickets],
+    () => computeNavBadges({ clients, onboarding, stickerOrders, investigations, doraQueue, tickets }),
+    [clients, onboarding, stickerOrders, investigations, doraQueue, tickets],
   );
   const displayName = user?.fullName || config.user;
   const initials = user?.fullName ? initialsFromName(user.fullName) : config.initials;

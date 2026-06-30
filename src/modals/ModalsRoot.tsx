@@ -16,6 +16,12 @@ import { InvestigationModal } from './InvestigationModal';
 import { InvoiceModal } from './InvoiceModal';
 import { NewInvestigationModal } from './NewInvestigationModal';
 import { OnboardWizard } from './OnboardWizard';
+import { ActivateClientModal } from './ActivateClientModal';
+import { StickerDesignModal } from './StickerDesignModal';
+import { NewStickerOrderModal } from './NewStickerOrderModal';
+import { TriggerPinModal } from './TriggerPinModal';
+import { DispatchOrderModal } from './DispatchOrderModal';
+import { DownloadPackageModal } from './DownloadPackageModal';
 import { StaffModal } from './StaffModal';
 import { TeamMemberModal } from './TeamMemberModal';
 import { TicketDetailModal } from './TicketDetailModal';
@@ -131,9 +137,16 @@ export function ModalsRoot() {
 
   return (
     <>
-      <Modal open={isOpen('onboard')} onClose={() => closeModal('onboard')} width={600}>
+      <Modal open={isOpen('onboard')} onClose={() => closeModal('onboard')} width={580}>
         <OnboardWizard />
       </Modal>
+
+      <ActivateClientModal />
+      <StickerDesignModal />
+      <NewStickerOrderModal />
+      <TriggerPinModal />
+      <DispatchOrderModal />
+      <DownloadPackageModal />
 
       <InvoiceModal />
       <StaffModal />

@@ -11,14 +11,11 @@ import { useApp } from '../context/AppContext';
 import { usePlatform } from '../context/PlatformContext';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
-import { useToast } from '../context/ToastContext';
 import type { DoraQueueRow } from '../types/dora';
-import { exportReport } from '../utils/exportReport';
 
 export function OpsDashboardPage() {
   const navigate = useNavigate();
   const { openModal } = useModal();
-  const { showToast } = useToast();
   const followUp = useFollowUp();
   const { openOnboardingAssign } = useApp();
   const { onboarding, overview, tickets, doraQueue, charts, loading } = usePlatform();
@@ -57,12 +54,7 @@ export function OpsDashboardPage() {
     <>
       <PageHeader
         title="Operations Dashboard"
-        subtitle="Client onboarding · Platform health · Training"
-        actions={
-          <Button variant="secondary" size="sm" onClick={() => exportReport(showToast, 'Ops Dashboard')}>
-            ↓ Export
-          </Button>
-        }
+        subtitle="Client onboarding pipeline · Platform health · Training status"
       />
 
       {loading && !health && pipeline.length === 0 && (

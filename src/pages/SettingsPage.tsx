@@ -23,15 +23,6 @@ import type { PlatformSettings, PlatformStaff, RoleId } from '../types';
 
 type SettingsTab = 'general' | 'staff' | 'nafdac' | 'api';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1';
-
-function formatLastSeen(online?: string): string {
-  if (!online) return '—';
-  const d = new Date(online);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
 function emptyGeneralForm(): Pick<
   PlatformSettings,
   | 'defaultVerifyDomain'
@@ -41,15 +32,17 @@ function emptyGeneralForm(): Pick<
   | 'smsCreditAlertPercent'
   | 'pinCreditAlertPercent'
   | 'p1p2AlertToSupport'
+  | 'aimlCanTriggerPin'
 > {
   return {
     defaultVerifyDomain: '',
     subdomainPattern: '',
     doraTrainingSlaDays: 3,
-    defaultPinDigits: 6,
+    defaultPinDigits: 10,
     smsCreditAlertPercent: 20,
     pinCreditAlertPercent: 20,
     p1p2AlertToSupport: true,
+    aimlCanTriggerPin: true,
   };
 }
 
@@ -61,11 +54,6 @@ export function SettingsPage() {
   const { staff, settings, loading, refresh } = usePlatform();
   const { active, setActive, isActive } = useTabs<SettingsTab>('general');
   const [generalForm, setGeneralForm] = useState(emptyGeneralForm());
-  const [nafdacForm, setNafdacForm] = useState({
-    nafdacMouSigned: false,
-    nafdacPortalUrl: '',
-    nafdacApiNamespace: '',
-  });
   const [apiForm, setApiForm] = useState({
     apiVersion: 'v1',
     rateLimitPerMinute: 1000,
@@ -79,16 +67,12 @@ export function SettingsPage() {
       defaultVerifyDomain: settings.defaultVerifyDomain ?? '',
       subdomainPattern: settings.subdomainPattern ?? '',
       doraTrainingSlaDays: settings.doraTrainingSlaDays ?? 3,
-      defaultPinDigits: settings.defaultPinDigits ?? 6,
+      defaultPinDigits: settings.defaultPinDigits === 12 ? 12 : 10,
       smsCreditAlertPercent: settings.smsCreditAlertPercent ?? 20,
       pinCreditAlertPercent: settings.pinCreditAlertPercent ?? 20,
-      p1p2AlertToSupport: settings.p1p2AlertToSupport ?? true,
-    });
-    setNafdacForm({
-      nafdacMouSigned: settings.nafdacMouSigned ?? false,
-      nafdacPortalUrl: settings.nafdacPortalUrl ?? '',
-      nafdacApiNamespace: settings.nafdacApiNamespace ?? '',
-    });
+    p1p2AlertToSupport: settings.p1p2AlertToSupport ?? true,
+    aimlCanTriggerPin: settings.aimlCanTriggerPin !== false,
+  });
     setApiForm({
       apiVersion: settings.apiVersion ?? 'v1',
       rateLimitPerMinute: settings.rateLimitPerMinute ?? 1000,
@@ -143,31 +127,33 @@ export function SettingsPage() {
 
       {isActive('general') && (
         <>
-          <Card>
+          <Card style={{ marginBottom: 12 }}>
             <div className="ct" style={{ marginBottom: 13 }}>
               Platform-wide defaults
             </div>
             <div className="fr2">
-              <FormGroup label="Default Verification Domain">
+              <FormGroup label="Default Verification Domain (Starter)">
                 <input
                   className="inp"
-                  value={generalForm.defaultVerifyDomain}
-                  onChange={(e) =>
-                    setGeneralForm((f) => ({ ...f, defaultVerifyDomain: e.target.value }))
+                  readOnly
+                  value={
+                    generalForm.defaultVerifyDomain ||
+                    'https://verify.dorascan.ai/{client_code}/{order_token}'
                   }
                 />
               </FormGroup>
               <FormGroup label="Subdomain Pattern (Growth)">
                 <input
                   className="inp"
-                  value={generalForm.subdomainPattern}
-                  onChange={(e) =>
-                    setGeneralForm((f) => ({ ...f, subdomainPattern: e.target.value }))
-                  }
+                  readOnly
+                  value={generalForm.subdomainPattern || 'verify-{clientname}.dorascan.ai'}
                 />
               </FormGroup>
             </div>
             <div className="fr2">
+              <FormGroup label="Default QR URL Mode">
+                <input className="inp" readOnly value="STATIC_PORTAL" />
+              </FormGroup>
               <FormGroup label="Default PIN Format">
                 <select
                   className="inp"
@@ -179,25 +165,26 @@ export function SettingsPage() {
                     }))
                   }
                 >
-                  <option value={6}>6-digit numeric</option>
-                  <option value={8}>8-digit numeric</option>
+                  <option value={10}>10-digit alphanumeric</option>
+                  <option value={12}>12-digit alphanumeric</option>
                 </select>
               </FormGroup>
-              <FormGroup label="DORA Training SLA (days)">
-                <input
-                  type="number"
-                  className="inp"
-                  min={1}
-                  value={generalForm.doraTrainingSlaDays}
-                  onChange={(e) =>
-                    setGeneralForm((f) => ({
-                      ...f,
-                      doraTrainingSlaDays: Number(e.target.value),
-                    }))
-                  }
-                />
-              </FormGroup>
             </div>
+            <FormGroup label="DORA Training SLA (days)">
+              <input
+                type="number"
+                className="inp"
+                min={1}
+                style={{ maxWidth: 120 }}
+                value={generalForm.doraTrainingSlaDays}
+                onChange={(e) =>
+                  setGeneralForm((f) => ({
+                    ...f,
+                    doraTrainingSlaDays: Number(e.target.value),
+                  }))
+                }
+              />
+            </FormGroup>
             <Button
               variant="primary"
               size="sm"
@@ -205,8 +192,6 @@ export function SettingsPage() {
               onClick={() =>
                 saveSettings(
                   {
-                    defaultVerifyDomain: generalForm.defaultVerifyDomain,
-                    subdomainPattern: generalForm.subdomainPattern,
                     defaultPinDigits: generalForm.defaultPinDigits,
                     doraTrainingSlaDays: generalForm.doraTrainingSlaDays,
                   },
@@ -214,16 +199,18 @@ export function SettingsPage() {
                 )
               }
             >
-              Save defaults
+              Save
             </Button>
           </Card>
-          <Card>
+
+          <Card style={{ marginBottom: 12 }}>
             <div className="ct" style={{ marginBottom: 4 }}>
-              Notification thresholds
+              Global notification thresholds
             </div>
             <div className="twrap">
               <div>
-                <div className="tlbl">Auto-alert at SMS credit threshold</div>
+                <div className="tlbl">Auto-alert clients at SMS credit threshold</div>
+                <div className="tdesc">Send auto-notification to Account Owner when SMS credits drop below</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
@@ -245,7 +232,8 @@ export function SettingsPage() {
             </div>
             <div className="twrap">
               <div>
-                <div className="tlbl">Auto-alert at PIN credit threshold</div>
+                <div className="tlbl">Auto-alert clients at PIN credit threshold</div>
+                <div className="tdesc">Send auto-notification to Account Owner when PIN credits drop below</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
@@ -266,40 +254,175 @@ export function SettingsPage() {
               </div>
             </div>
             <ToggleRowCustom
-              label="P1/P2 internal alert to Platform Support"
+              label="P1/P2 investigation Sartor alert"
+              description="Notify internal Platform Support team on every P1 or P2 investigation"
               control={
                 <div
                   className={`toggle ${generalForm.p1p2AlertToSupport ? 'on' : ''}`}
                   role="switch"
                   aria-checked={generalForm.p1p2AlertToSupport}
                   tabIndex={0}
-                  onClick={() =>
-                    setGeneralForm((f) => ({
-                      ...f,
-                      p1p2AlertToSupport: !f.p1p2AlertToSupport,
-                    }))
-                  }
+                  onClick={() => {
+                    const next = !generalForm.p1p2AlertToSupport;
+                    setGeneralForm((f) => ({ ...f, p1p2AlertToSupport: next }));
+                    saveSettings({ p1p2AlertToSupport: next }, 'Notification settings saved.');
+                  }}
                 />
               }
             />
-            <div style={{ marginTop: 11 }}>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={saving}
-                onClick={() =>
+          </Card>
+
+          <Card style={{ marginBottom: 12 }}>
+            <CardHeader
+              title="Bank Accounts & Exchange Rates"
+              action={
+                <Button className="bacc" size="sm" onClick={() => showToast('Add bank account — coming soon.', 'warn')}>
+                  + Add Account
+                </Button>
+              }
+            />
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>
+              Accounts shown on invoices for client payment. Exchange rates convert NGN invoice totals for USD/GBP display.
+            </div>
+            <table style={{ fontSize: 12, marginBottom: 12 }}>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Bank</th>
+                  <th>Account Name</th>
+                  <th>Account No.</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><Badge variant="bg">NGN</Badge></td>
+                  <td>Guaranty Trust Bank</td>
+                  <td>Sartor Limited</td>
+                  <td style={{ fontFamily: "'DM Mono', monospace" }}>0123456789</td>
+                  <td><Badge variant="bg">Primary</Badge></td>
+                  <td><Button variant="secondary" size="sm" onClick={() => showToast('Edit bank account…', 'success')}>Edit</Button></td>
+                </tr>
+                <tr>
+                  <td><Badge variant="bb">USD</Badge></td>
+                  <td>GTB Domiciliary</td>
+                  <td>Sartor Limited</td>
+                  <td style={{ fontFamily: "'DM Mono', monospace" }}>0123456790</td>
+                  <td><Badge variant="bg">Active</Badge></td>
+                  <td><Button variant="secondary" size="sm" onClick={() => showToast('Edit bank account…', 'success')}>Edit</Button></td>
+                </tr>
+                <tr>
+                  <td><Badge variant="bp">GBP</Badge></td>
+                  <td>GTB Domiciliary</td>
+                  <td>Sartor Limited</td>
+                  <td style={{ fontFamily: "'DM Mono', monospace" }}>0123456791</td>
+                  <td><Badge variant="bg">Active</Badge></td>
+                  <td><Button variant="secondary" size="sm" onClick={() => showToast('Edit bank account…', 'success')}>Edit</Button></td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="sect-divider">Exchange Rates (NGN base)</div>
+            <div className="fr2">
+              <FormGroup label="NGN per 1 USD">
+                <input className="inp" defaultValue="1,580" onChange={() => showToast('Rate updated', 'success')} />
+              </FormGroup>
+              <FormGroup label="NGN per 1 GBP">
+                <input className="inp" defaultValue="2,010" />
+              </FormGroup>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+              Used to show USD/GBP equivalents on NGN invoices. Update when rates move materially.
+            </div>
+          </Card>
+
+          <Card>
+            <div className="ct" style={{ marginBottom: 5 }}>
+              Role Delegation — PIN Generation
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 13 }}>
+              Control which roles may <strong>trigger</strong> PIN generation against a confirmed client order. Executing
+              generation stays with the AI/ML Lead; downloading the print package stays with CEO and Operations.
+            </div>
+            <div
+              className="twrap"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 14,
+                padding: '12px 14px',
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
+                borderRadius: 9,
+                marginBottom: 10,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div className="tlbl">CEO — trigger PIN generation</div>
+                <div className="tdesc">Always enabled. The Managing Director / CEO can trigger any PIN generation.</div>
+              </div>
+              <div className="toggle on" style={{ opacity: 0.6, cursor: 'not-allowed' }} title="Always on for CEO" />
+            </div>
+            <div
+              className="twrap"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 14,
+                padding: '12px 14px',
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
+                borderRadius: 9,
+                marginBottom: 10,
+                opacity: 0.65,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div className="tlbl">Operations Manager — trigger PIN generation</div>
+                <div className="tdesc">Enabled when an Operations Manager is on the team.</div>
+              </div>
+              <div className="toggle on" style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Ops Manager role" />
+            </div>
+            <div
+              className="twrap"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 14,
+                padding: '12px 14px',
+                background: 'var(--ab)',
+                border: '1.5px solid var(--amber)',
+                borderRadius: 9,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div className="tlbl">🤖 Delegate to AI/ML Lead</div>
+                <div className="tdesc">
+                  Let the AI/ML Lead also <strong>trigger</strong> PIN generation — useful while there is no Operations
+                  Manager. Revoke when Ops is hired.
+                </div>
+              </div>
+              <div
+                className={`toggle ${generalForm.aimlCanTriggerPin ? 'on' : ''}`}
+                role="switch"
+                aria-checked={generalForm.aimlCanTriggerPin}
+                tabIndex={0}
+                title="CEO-only setting"
+                onClick={() => {
+                  const next = !generalForm.aimlCanTriggerPin;
+                  setGeneralForm((f) => ({ ...f, aimlCanTriggerPin: next }));
                   saveSettings(
-                    {
-                      smsCreditAlertPercent: generalForm.smsCreditAlertPercent,
-                      pinCreditAlertPercent: generalForm.pinCreditAlertPercent,
-                      p1p2AlertToSupport: generalForm.p1p2AlertToSupport,
-                    },
-                    'Notification thresholds saved.',
-                  )
-                }
-              >
-                Save thresholds
-              </Button>
+                    { aimlCanTriggerPin: next },
+                    next ? 'AI/ML PIN trigger delegation enabled.' : 'AI/ML PIN trigger delegation revoked.',
+                  );
+                }}
+              />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>
+              🔒 Only the MD/CEO can change this setting. Changes are recorded in the audit log.
             </div>
           </Card>
         </>
@@ -327,7 +450,6 @@ export function SettingsPage() {
                   <th>Email</th>
                   <th>Role</th>
                   <th>Status</th>
-                  <th>Last seen</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -358,7 +480,6 @@ export function SettingsPage() {
                       <td>
                         <Badge variant={s.blocked ? 'br' : 'bg'}>{s.blocked ? 'Blocked' : 'Active'}</Badge>
                       </td>
-                      <td>{formatLastSeen(s.online)}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 5 }}>
                           <Button variant="secondary" size="sm" onClick={() => openStaff(s._id)}>
@@ -382,85 +503,37 @@ export function SettingsPage() {
 
       {isActive('nafdac') && (
         <>
-          {!nafdacForm.nafdacMouSigned && (
-            <div className="warn-b">
-              Regulatory portal access remains disabled until the NAFDAC MOU is marked signed below.
-            </div>
-          )}
+          <div className="warn-banner">
+            ⚠ NAFDAC regulatory portal is a Sprint 3 deliverable. It is gated on the signed MOU with NAFDAC PPMD. The
+            /api/regulatory/ namespace is scaffolded — no live endpoints until MOU is in place.
+          </div>
           <Card>
             <div className="ct" style={{ marginBottom: 11 }}>
               NAFDAC Portal Status
             </div>
-            <div className="srow">
+            <div className="stat-row">
               <span>MOU Status</span>
-              <Badge variant={nafdacForm.nafdacMouSigned ? 'bg' : 'br'}>
-                {nafdacForm.nafdacMouSigned ? 'Signed' : 'Not signed'}
+              <Badge variant={settings?.nafdacMouSigned ? 'bg' : 'br'}>
+                {settings?.nafdacMouSigned ? 'Signed' : 'Not Signed'}
               </Badge>
             </div>
-            <div className="srow">
+            <div className="stat-row">
               <span>API Namespace</span>
+              <Badge variant="bg">Scaffolded — /api/regulatory/</Badge>
+            </div>
+            <div className="stat-row">
+              <span>NAFDAC Auth Middleware</span>
+              <Badge variant="bg">Built — Returns 403</Badge>
+            </div>
+            <div className="stat-row">
+              <span>Regulatory Portal URL</span>
               <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11 }}>
-                {nafdacForm.nafdacApiNamespace || '—'}
+                {settings?.nafdacPortalUrl || 'regulatory.sartor.ng'} (not live)
               </span>
             </div>
-            <div className="srow">
-              <span>Portal URL</span>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11 }}>
-                {nafdacForm.nafdacPortalUrl || '—'}
-                {!nafdacForm.nafdacMouSigned ? ' (not live)' : ''}
-              </span>
-            </div>
-            <FormGroup label="Portal URL">
-              <input
-                className="inp"
-                value={nafdacForm.nafdacPortalUrl}
-                onChange={(e) =>
-                  setNafdacForm((f) => ({ ...f, nafdacPortalUrl: e.target.value }))
-                }
-              />
-            </FormGroup>
-            <FormGroup label="API namespace">
-              <input
-                className="inp"
-                value={nafdacForm.nafdacApiNamespace}
-                onChange={(e) =>
-                  setNafdacForm((f) => ({ ...f, nafdacApiNamespace: e.target.value }))
-                }
-              />
-            </FormGroup>
-            <ToggleRowCustom
-              label="NAFDAC MOU signed"
-              description="Enable when MOU with NAFDAC PPMD is executed"
-              control={
-                <div
-                  className={`toggle ${nafdacForm.nafdacMouSigned ? 'on' : ''}`}
-                  role="switch"
-                  aria-checked={nafdacForm.nafdacMouSigned}
-                  tabIndex={0}
-                  onClick={() =>
-                    setNafdacForm((f) => ({ ...f, nafdacMouSigned: !f.nafdacMouSigned }))
-                  }
-                />
-              }
-            />
-            <div style={{ marginTop: 11 }}>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={saving}
-                onClick={() =>
-                  saveSettings(
-                    {
-                      nafdacMouSigned: nafdacForm.nafdacMouSigned,
-                      nafdacPortalUrl: nafdacForm.nafdacPortalUrl,
-                      nafdacApiNamespace: nafdacForm.nafdacApiNamespace,
-                    },
-                    'NAFDAC settings saved.',
-                  )
-                }
-              >
-                Save NAFDAC settings
-              </Button>
+            <div className="stat-row">
+              <span>Target Sprint</span>
+              <Badge variant="bb">Sprint 3</Badge>
             </div>
           </Card>
         </>
@@ -471,61 +544,28 @@ export function SettingsPage() {
           <div className="ct" style={{ marginBottom: 11 }}>
             API & Webhook Configuration
           </div>
-          <div className="srow">
-            <span>API base URL (this console)</span>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11 }}>{API_BASE}</span>
+          <div className="stat-row">
+            <span>API Version</span>
+            <span style={{ fontFamily: "'DM Mono', monospace" }}>
+              {settings?.apiVersion ?? apiForm.apiVersion}
+            </span>
           </div>
-          <FormGroup label="API version">
-            <input
-              className="inp"
-              value={apiForm.apiVersion}
-              onChange={(e) => setApiForm((f) => ({ ...f, apiVersion: e.target.value }))}
-            />
-          </FormGroup>
-          <FormGroup label="Rate limit (requests/min per client)">
-            <input
-              type="number"
-              className="inp"
-              min={100}
-              value={apiForm.rateLimitPerMinute}
-              onChange={(e) =>
-                setApiForm((f) => ({ ...f, rateLimitPerMinute: Number(e.target.value) }))
-              }
-            />
-          </FormGroup>
-          <div className="srow">
+          <div className="stat-row">
+            <span>Rate Limit</span>
+            <span style={{ fontFamily: "'DM Mono', monospace" }}>
+              {(settings?.rateLimitPerMinute ?? apiForm.rateLimitPerMinute).toLocaleString()} req/min per client
+            </span>
+          </div>
+          <div className="stat-row">
             <span>Authentication</span>
-            <Badge variant="bb">s-token header</Badge>
+            <Badge variant="bb">JWT Bearer</Badge>
           </div>
-          <FormGroup label="Webhook retry count">
-            <input
-              type="number"
-              className="inp"
-              min={0}
-              max={10}
-              value={apiForm.webhookRetryCount}
-              onChange={(e) =>
-                setApiForm((f) => ({ ...f, webhookRetryCount: Number(e.target.value) }))
-              }
-            />
-          </FormGroup>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={saving}
-            onClick={() =>
-              saveSettings(
-                {
-                  apiVersion: apiForm.apiVersion,
-                  rateLimitPerMinute: apiForm.rateLimitPerMinute,
-                  webhookRetryCount: apiForm.webhookRetryCount,
-                },
-                'API settings saved.',
-              )
-            }
-          >
-            Save API settings
-          </Button>
+          <div className="stat-row">
+            <span>Webhook Retries</span>
+            <span style={{ fontFamily: "'DM Mono', monospace" }}>
+              {settings?.webhookRetryCount ?? apiForm.webhookRetryCount} × exponential backoff
+            </span>
+          </div>
         </Card>
       )}
     </>

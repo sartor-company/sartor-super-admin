@@ -2,6 +2,7 @@ import { apiClient, unwrap } from './client';
 import type { Client } from '../data/clients';
 import type { InvestigationRow } from '../data/investigations';
 import type { OnboardingRow } from '../data/onboarding';
+import type { StickerOrderRow, StickerOrderSummary } from '../data/stickerOrders';
 import type { PlatformNotification } from '../types';
 
 export const platformApi = {
@@ -26,7 +27,12 @@ export const platformApi = {
 
   dashboard: () => apiClient.get('/sartor/dashboard').then((r) => unwrap(r)),
 
-  clients: (params?: { search?: string; status?: string }) =>
+  clients: (params?: {
+    search?: string;
+    status?: string;
+    product?: string;
+    accountStatus?: string;
+  }) =>
     apiClient.get('/sartor/clients', { params }).then((r) => unwrap<{ data: Client[] }>(r)),
 
   client: (code: string) =>
@@ -56,8 +62,17 @@ export const platformApi = {
   onboard: (body: Record<string, unknown>) =>
     apiClient.post('/sartor/onboard', body).then((r) => unwrap(r)),
 
+  activateClient: (id: string, body?: { mode?: 'paid' | 'credit'; reason?: string }) =>
+    apiClient.post(`/sartor/clients/${id}/activate`, body ?? {}).then((r) => unwrap(r)),
+
   patchOnboarding: (id: string, body: Record<string, unknown>) =>
     apiClient.patch(`/sartor/onboarding/${id}`, body).then((r) => unwrap(r)),
+
+  onboardingStickerDesign: (adminId: string) =>
+    apiClient.get(`/sartor/onboarding/${adminId}/sticker-design`).then((r) => unwrap(r)),
+
+  createOnboardingProduct: (adminId: string, body: Record<string, unknown>) =>
+    apiClient.post(`/sartor/onboarding/${adminId}/products`, body).then((r) => unwrap(r)),
 
   followUp: (id: string, message: string, subject?: string) =>
     apiClient.post(`/sartor/clients/${id}/follow-up`, { message, subject }).then((r) => unwrap(r)),
@@ -126,4 +141,17 @@ export const platformApi = {
   reports: () => apiClient.get('/sartor/reports/summary').then((r) => unwrap(r)),
 
   charts: () => apiClient.get('/sartor/charts').then((r) => unwrap(r)),
+
+  stickerOrders: (params?: { search?: string; client?: string; stage?: string }) =>
+    apiClient
+      .get('/sartor/sticker-orders', { params })
+      .then((r) =>
+        unwrap<{ data: StickerOrderRow[]; summary: StickerOrderSummary }>(r),
+      ),
+
+  createStickerOrder: (body: Record<string, unknown>) =>
+    apiClient.post('/sartor/sticker-orders', body).then((r) => unwrap(r)),
+
+  patchStickerOrder: (id: string, body: Record<string, unknown>) =>
+    apiClient.patch(`/sartor/sticker-orders/${id}`, body).then((r) => unwrap(r)),
 };
