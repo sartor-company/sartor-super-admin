@@ -2,6 +2,8 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { platformApi } from '../api/platform';
 import { Button } from '../components/ui/Button';
 import { FormGroup } from '../components/ui/FormGroup';
+import { CountrySelect } from '../components/ui/CountrySelect';
+import { useCountries } from '../hooks/useCountries';
 import { usePlatform } from '../context/PlatformContext';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
@@ -101,6 +103,12 @@ function Step3Engagement({
     setOb((s) => ({
       ...s,
       crmTier: tier,
+      revSeats:
+        tier === '360'
+          ? 0
+          : tier === 'depot'
+            ? Math.max(5, s.revSeats || 5)
+            : Math.max(3, s.revSeats || 3),
       services: { ...s.services, scdora: tier === '360' ? true : s.services.scdora },
     }));
   };
@@ -449,7 +457,7 @@ function Step3Engagement({
 export function OnboardWizard() {
   const { closeModal } = useModal();
   const { showToast } = useToast();
-  const { refreshClients, refreshOnboarding, staff } = usePlatform();
+  const { refreshClients, refreshOnboarding, refresh, staff } = usePlatform();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [ob, setOb] = useState(freshObState);
@@ -467,6 +475,8 @@ export function OnboardWizard() {
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [cityState, setCityState] = useState('');
+  const [countryCode, setCountryCode] = useState('NG');
+  const { getLabel: getCountryLabel } = useCountries();
 
   const [adminFirstName, setAdminFirstName] = useState('');
   const [adminLastName, setAdminLastName] = useState('');
@@ -576,6 +586,7 @@ export function OnboardWizard() {
         fullName: companyName.trim(),
         email: adminEmail.trim(),
         phone: contactPhone.trim() || adminPhone.trim() || undefined,
+        countryCode,
         address: cityState.trim() || undefined,
         industry,
         rcNumber: rcNumber.trim(),
@@ -589,7 +600,7 @@ export function OnboardWizard() {
         pilotConvert: ob.pilotConvert,
         crmTierType: ob.crmTier,
         crmTier: ob.crmTier,
-        revSeats: ob.revSeats,
+        revSeats: ob.crmTier === '360' ? 0 : ob.revSeats,
         opSeats: ob.opSeats,
         crmCycle: ob.crmCycle,
         domainUpgrade: ob.domainUpgrade,
@@ -599,12 +610,17 @@ export function OnboardWizard() {
       });
       const inv = (result as { invoice?: { invoiceId: string; lineItems: typeof bill.lines; amount: number } })
         .invoice;
-      if (inv) setSubmittedInvoice(inv);
-      await Promise.all([refreshClients(), refreshOnboarding()]);
+      if (inv) {
+        setSubmittedInvoice(inv);
+        setInvoiceOpen(true);
+      }
+      await Promise.all([refreshClients(), refreshOnboarding(), refresh()]);
       showToast(`${companyName} onboarded (inactive). Invoice pending — activate when ready.`, 'success');
-      closeModal('onboard');
-      setStep(0);
-      setOb(freshObState());
+      if (!inv) {
+        closeModal('onboard');
+        setStep(0);
+        setOb(freshObState());
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Onboarding failed';
       const isAuth =
@@ -697,20 +713,23 @@ export function OnboardWizard() {
               <FormGroup label="Contact Phone *">
                 <input
                   className="inp"
-                  placeholder="+234..."
+                  placeholder="e.g. 0812… or +234…"
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
                 />
               </FormGroup>
-              <FormGroup label="City / State">
-                <input
-                  className="inp"
-                  placeholder="e.g. Lagos, Lagos State"
-                  value={cityState}
-                  onChange={(e) => setCityState(e.target.value)}
-                />
+              <FormGroup label="Country *">
+                <CountrySelect value={countryCode} onChange={setCountryCode} />
               </FormGroup>
             </div>
+            <FormGroup label="City / State">
+              <input
+                className="inp"
+                placeholder="e.g. Lagos, Lagos State"
+                value={cityState}
+                onChange={(e) => setCityState(e.target.value)}
+              />
+            </FormGroup>
           </>
         )}
 
@@ -809,6 +828,7 @@ export function OnboardWizard() {
             </div>
             {[
               ['Company', companyName],
+              ['Country', getCountryLabel(countryCode)],
               ['Configuration', configSummary],
               ['Billing cycle', ob.services.crm ? (ob.crmCycle === 'annual' ? 'Annual (20% off)' : 'Monthly') : 'One-off'],
               ['Account status', 'Inactive (on creation)'],
@@ -890,7 +910,23 @@ export function OnboardWizard() {
 
       <OnboardingInvoiceModal
         open={invoiceOpen}
-        onClose={() => setInvoiceOpen(false)}
+        onClose={() => {
+          setInvoiceOpen(false);
+          if (submittedInvoice) {
+            closeModal('onboard');
+            setStep(0);
+            setOb(freshObState());
+            setSubmittedInvoice(null);
+            setCompanyName('');
+            setRcNumber('');
+            setIndustry('');
+            setContactName('');
+            setContactEmail('');
+            setContactPhone('');
+            setCityState('');
+            setCountryCode('NG');
+          }
+        }}
         companyName={companyName}
         invoiceId={submittedInvoice?.invoiceId}
         lineItems={invoiceLines}

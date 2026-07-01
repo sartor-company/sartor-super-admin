@@ -23,6 +23,9 @@ apiClient.interceptors.response.use(
     }
     if (err.response?.status === 401) {
       useAuthStore.getState().logout();
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login?session=expired';
+      }
     }
     return Promise.reject(err);
   },

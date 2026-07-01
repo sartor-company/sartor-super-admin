@@ -19,11 +19,14 @@ import { platformApi } from '../api/platform';
 import type { Client } from '../data/clients';
 import { useTabs } from '../hooks/useTabs';
 import { crmPillLabel, crmPillVariant, tierPillClass } from './shared';
+import { InvoiceDetailModal } from '../modals/InvoiceDetailModal';
 import {
   formatInvoiceAmount,
   formatUsd,
   invoiceStatusVariant,
+  type PlatformInvoiceRow,
 } from '../utils/financeDisplay';
+import { transactionToInvoiceRow } from '../utils/invoiceDownload';
 import { deriveClientTierProfile, crmBillingDetail } from '../utils/clientTier';
 import { useActivateClient, clientProductsLabel } from '../hooks/useActivateClient';
 import { useRoleGates } from '../hooks/useRoleGates';
@@ -57,9 +60,13 @@ type TxRow = {
   type: string;
   qty: string;
   amount: string;
+  amountNum?: number;
   by: string;
   inv: string;
+  invoiceId?: string;
   status?: string;
+  _id?: string;
+  lineItems?: { desc?: string; amt?: number; type?: string }[];
 };
 
 type ClientDetail = Client & {
@@ -116,6 +123,7 @@ export function ClientDetailPage() {
   const [crmEnabledCfg, setCrmEnabledCfg] = useState(false);
   const [campaignStacking, setCampaignStacking] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
+  const [detailInvoice, setDetailInvoice] = useState<PlatformInvoiceRow | null>(null);
 
   const reloadClient = async (clientCode: string) => {
     const data = (await platformApi.client(clientCode)) as ClientDetail;
@@ -1015,12 +1023,20 @@ export function ClientDetailPage() {
                           {formatUsd(amtNum)}
                         </td>
                         <td>
-                          <Badge variant={invoiceStatusVariant(t.status || 'Paid')}>
-                            {t.status || 'Paid'}
+                          <Badge variant={invoiceStatusVariant(t.status || 'Pending')}>
+                            {t.status || 'Pending'}
                           </Badge>
                         </td>
                         <td>
-                          <Button variant="secondary" size="sm" onClick={() => openModal('invoice')}>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() =>
+                              setDetailInvoice(
+                                transactionToInvoiceRow(t, client?.name, client?.code),
+                              )
+                            }
+                          >
                             View
                           </Button>
                         </td>
@@ -1188,6 +1204,12 @@ export function ClientDetailPage() {
           </table>
         </Card>
       )}
+
+      <InvoiceDetailModal
+        invoice={detailInvoice}
+        open={!!detailInvoice}
+        onClose={() => setDetailInvoice(null)}
+      />
     </>
   );
 }

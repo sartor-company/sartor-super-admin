@@ -8,6 +8,7 @@ import {
   revenueBadgeVariant,
   type PlatformInvoiceRow,
 } from '../utils/financeDisplay';
+import { downloadInvoicePdf } from '../utils/invoiceDownload';
 
 export function InvoiceDetailModal({
   invoice,
@@ -66,6 +67,22 @@ export function InvoiceDetailModal({
         ))}
       </div>
       <ModalFooter>
+        <Button
+          variant="secondary"
+          onClick={() =>
+            downloadInvoicePdf({
+              invoiceId: invoice.invoiceId,
+              clientName: invoice.clientName,
+              clientCode: invoice.clientCode,
+              status: invoice.status,
+              amount: invoice.amount,
+              lineItems: lines,
+              description: invoice.description,
+            })
+          }
+        >
+          Download PDF
+        </Button>
         <Button variant="secondary" onClick={onClose}>
           Close
         </Button>

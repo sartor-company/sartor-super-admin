@@ -2,6 +2,7 @@ import { Modal, ModalFooter } from '../components/ui/Modal';
 import { Button } from '../components/ui/Button';
 import type { BillLine } from '../utils/pricing';
 import { formatNaira } from '../utils/format';
+import { downloadInvoicePdf } from '../utils/invoiceDownload';
 
 export function OnboardingInvoiceModal({
   open,
@@ -97,6 +98,22 @@ export function OnboardingInvoiceModal({
         ) : null}
       </div>
       <ModalFooter>
+        {invoiceId ? (
+          <Button
+            variant="secondary"
+            onClick={() =>
+              downloadInvoicePdf({
+                invoiceId,
+                clientName: companyName,
+                status,
+                amount: total || monthly || 0,
+                lineItems,
+              })
+            }
+          >
+            Download PDF
+          </Button>
+        ) : null}
         <Button variant="secondary" onClick={onClose}>
           Close
         </Button>
