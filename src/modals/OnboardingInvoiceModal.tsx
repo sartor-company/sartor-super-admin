@@ -1,5 +1,6 @@
 import { Modal, ModalFooter } from '../components/ui/Modal';
 import { Button } from '../components/ui/Button';
+import { useInvoiceBranding } from '../hooks/useInvoiceBranding';
 import type { BillLine } from '../utils/pricing';
 import { formatNaira } from '../utils/format';
 import { downloadInvoicePdf } from '../utils/invoiceDownload';
@@ -25,6 +26,7 @@ export function OnboardingInvoiceModal({
   status?: string;
   onSend?: () => void;
 }) {
+  const branding = useInvoiceBranding();
   return (
     <Modal
       open={open}
@@ -102,13 +104,16 @@ export function OnboardingInvoiceModal({
           <Button
             variant="secondary"
             onClick={() =>
-              downloadInvoicePdf({
-                invoiceId,
-                clientName: companyName,
-                status,
-                amount: total || monthly || 0,
-                lineItems,
-              })
+              downloadInvoicePdf(
+                {
+                  invoiceId,
+                  clientName: companyName,
+                  status,
+                  amount: total || monthly || 0,
+                  lineItems,
+                },
+                branding,
+              )
             }
           >
             Download PDF

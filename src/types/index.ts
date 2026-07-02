@@ -160,6 +160,20 @@ export interface DoraLabelContext {
   adminId?: string;
 }
 
+export interface BankAccount {
+  _id?: string;
+  currency: string;
+  bank: string;
+  accountName: string;
+  accountNumber: string;
+  status: string;
+}
+
+export interface ExchangeRates {
+  usd: number;
+  gbp: number;
+}
+
 export interface PlatformSettings {
   defaultVerifyDomain: string;
   subdomainPattern: string;
@@ -175,6 +189,12 @@ export interface PlatformSettings {
   rateLimitPerMinute: number;
   webhookRetryCount: number;
   aimlCanTriggerPin?: boolean;
+  companyName?: string;
+  companyAddress?: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  bankAccounts?: BankAccount[];
+  exchangeRates?: ExchangeRates;
   updatedAt?: number;
 }
 

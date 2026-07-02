@@ -19,7 +19,20 @@ import { useToast } from '../context/ToastContext';
 import { useTabs } from '../hooks/useTabs';
 import { platformApi } from '../api/platform';
 import { useAuthStore } from '../store/authStore';
-import type { PlatformSettings, PlatformStaff, RoleId } from '../types';
+import { BankAccountModal } from '../modals/BankAccountModal';
+import type {
+  BankAccount,
+  PlatformSettings,
+  PlatformStaff,
+  RoleId,
+} from '../types';
+
+function bankBadgeVariant(currency: string): 'bg' | 'bb' | 'bp' | 'bn' {
+  if (currency === 'NGN') return 'bg';
+  if (currency === 'USD') return 'bb';
+  if (currency === 'GBP') return 'bp';
+  return 'bn';
+}
 
 type SettingsTab = 'general' | 'staff' | 'nafdac' | 'api';
 
@@ -60,9 +73,19 @@ export function SettingsPage() {
     webhookRetryCount: 3,
   });
   const [saving, setSaving] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [rateForm, setRateForm] = useState({ usd: 1580, gbp: 2010 });
+  const [bankModalOpen, setBankModalOpen] = useState(false);
+  const [editingBank, setEditingBank] = useState<BankAccount | null>(null);
+  const [bankSaving, setBankSaving] = useState(false);
 
   useEffect(() => {
     if (!settings) return;
+    setBankAccounts(settings.bankAccounts ?? []);
+    setRateForm({
+      usd: settings.exchangeRates?.usd ?? 1580,
+      gbp: settings.exchangeRates?.gbp ?? 2010,
+    });
     setGeneralForm({
       defaultVerifyDomain: settings.defaultVerifyDomain ?? '',
       subdomainPattern: settings.subdomainPattern ?? '',
@@ -95,6 +118,56 @@ export function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const persistBankAccounts = async (next: BankAccount[]) => {
+    setBankSaving(true);
+    try {
+      await platformApi.patchSettings({ bankAccounts: next });
+      await refresh();
+      setBankAccounts(next);
+      showToast('Bank accounts updated.', 'success');
+      setBankModalOpen(false);
+      setEditingBank(null);
+    } catch {
+      showToast('Could not save bank account.', 'error');
+    } finally {
+      setBankSaving(false);
+    }
+  };
+
+  const saveBankAccount = (account: BankAccount) => {
+    let next: BankAccount[];
+    if (account._id) {
+      next = bankAccounts.map((a) => (a._id === account._id ? account : a));
+    } else {
+      next = [...bankAccounts, account];
+    }
+    // Only one Primary allowed
+    if (account.status === 'Primary') {
+      next = next.map((a) =>
+        a === account || a._id === account._id
+          ? a
+          : a.status === 'Primary'
+            ? { ...a, status: 'Active' }
+            : a,
+      );
+    }
+    void persistBankAccounts(next);
+  };
+
+  const deleteBankAccount = (account: BankAccount) => {
+    const next = bankAccounts.filter((a) =>
+      account._id ? a._id !== account._id : a !== account,
+    );
+    void persistBankAccounts(next);
+  };
+
+  const saveRates = () => {
+    void saveSettings(
+      { exchangeRates: { usd: Number(rateForm.usd), gbp: Number(rateForm.gbp) } },
+      'Exchange rates saved.',
+    );
   };
 
   const resetStaffPassword = async (member: PlatformStaff) => {
@@ -276,7 +349,14 @@ export function SettingsPage() {
             <CardHeader
               title="Bank Accounts & Exchange Rates"
               action={
-                <Button className="bacc" size="sm" onClick={() => showToast('Add bank account — coming soon.', 'warn')}>
+                <Button
+                  className="bacc"
+                  size="sm"
+                  onClick={() => {
+                    setEditingBank(null);
+                    setBankModalOpen(true);
+                  }}
+                >
                   + Add Account
                 </Button>
               }
@@ -296,45 +376,100 @@ export function SettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td><Badge variant="bg">NGN</Badge></td>
-                  <td>Guaranty Trust Bank</td>
-                  <td>Sartor Limited</td>
-                  <td style={{ fontFamily: "'DM Mono', monospace" }}>0123456789</td>
-                  <td><Badge variant="bg">Primary</Badge></td>
-                  <td><Button variant="secondary" size="sm" onClick={() => showToast('Edit bank account…', 'success')}>Edit</Button></td>
-                </tr>
-                <tr>
-                  <td><Badge variant="bb">USD</Badge></td>
-                  <td>GTB Domiciliary</td>
-                  <td>Sartor Limited</td>
-                  <td style={{ fontFamily: "'DM Mono', monospace" }}>0123456790</td>
-                  <td><Badge variant="bg">Active</Badge></td>
-                  <td><Button variant="secondary" size="sm" onClick={() => showToast('Edit bank account…', 'success')}>Edit</Button></td>
-                </tr>
-                <tr>
-                  <td><Badge variant="bp">GBP</Badge></td>
-                  <td>GTB Domiciliary</td>
-                  <td>Sartor Limited</td>
-                  <td style={{ fontFamily: "'DM Mono', monospace" }}>0123456791</td>
-                  <td><Badge variant="bg">Active</Badge></td>
-                  <td><Button variant="secondary" size="sm" onClick={() => showToast('Edit bank account…', 'success')}>Edit</Button></td>
-                </tr>
+                {bankAccounts.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ color: 'var(--text3)', padding: '12px 0' }}>
+                      No bank accounts yet. Add one to show payment details on invoices.
+                    </td>
+                  </tr>
+                ) : (
+                  bankAccounts.map((acct, i) => (
+                    <tr key={acct._id ?? i}>
+                      <td>
+                        <Badge variant={bankBadgeVariant(acct.currency)}>{acct.currency}</Badge>
+                      </td>
+                      <td>{acct.bank}</td>
+                      <td>{acct.accountName}</td>
+                      <td style={{ fontFamily: "'DM Mono', monospace" }}>{acct.accountNumber}</td>
+                      <td>
+                        <Badge variant={acct.status === 'Primary' ? 'bg' : acct.status === 'Inactive' ? 'bn' : 'ba'}>
+                          {acct.status}
+                        </Badge>
+                      </td>
+                      <td style={{ display: 'flex', gap: 6 }}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setEditingBank(acct);
+                            setBankModalOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => deleteBankAccount(acct)}
+                        >
+                          Delete
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
             <div className="sect-divider">Exchange Rates (NGN base)</div>
             <div className="fr2">
               <FormGroup label="NGN per 1 USD">
-                <input className="inp" defaultValue="1,580" onChange={() => showToast('Rate updated', 'success')} />
+                <input
+                  className="inp"
+                  type="number"
+                  value={rateForm.usd}
+                  onChange={(e) =>
+                    setRateForm((f) => ({ ...f, usd: Number(e.target.value) }))
+                  }
+                />
               </FormGroup>
               <FormGroup label="NGN per 1 GBP">
-                <input className="inp" defaultValue="2,010" />
+                <input
+                  className="inp"
+                  type="number"
+                  value={rateForm.gbp}
+                  onChange={(e) =>
+                    setRateForm((f) => ({ ...f, gbp: Number(e.target.value) }))
+                  }
+                />
               </FormGroup>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-              Used to show USD/GBP equivalents on NGN invoices. Update when rates move materially.
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+              }}
+            >
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+                Used to show USD/GBP equivalents on NGN invoices. Update when rates move materially.
+              </div>
+              <Button className="bacc" size="sm" disabled={saving} onClick={saveRates}>
+                Save rates
+              </Button>
             </div>
           </Card>
+
+          <BankAccountModal
+            open={bankModalOpen}
+            account={editingBank}
+            saving={bankSaving}
+            onClose={() => {
+              setBankModalOpen(false);
+              setEditingBank(null);
+            }}
+            onSave={saveBankAccount}
+          />
 
           <Card>
             <div className="ct" style={{ marginBottom: 5 }}>
