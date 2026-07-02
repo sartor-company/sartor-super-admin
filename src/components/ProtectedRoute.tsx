@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { platformApi } from '../api/platform';
 import { useAuthStore } from '../store/authStore';
+import { Loader } from './ui/Loader';
 
 export function ProtectedRoute() {
   const token = useAuthStore((s) => s.token);
@@ -49,11 +50,7 @@ export function ProtectedRoute() {
   }
 
   if (sessionState === 'checking') {
-    return (
-      <div style={{ padding: 48, textAlign: 'center', color: 'var(--text3)' }}>
-        Verifying session…
-      </div>
-    );
+    return <Loader fullscreen />;
   }
 
   return <Outlet />;

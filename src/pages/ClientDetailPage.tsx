@@ -10,6 +10,7 @@ import { FormGroup } from '../components/ui/FormGroup';
 import { KCard, KCardGrid } from '../components/ui/KCard';
 import { ProductPill } from '../components/ui/ProductPill';
 import { TabBar } from '../components/ui/TabBar';
+import { Loader } from '../components/ui/Loader';
 import { NoteList, SectionTitle, ToggleRow, type NoteItemData } from '../components/patterns';
 import { useOpenTeamMember } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
@@ -289,11 +290,7 @@ export function ClientDetailPage() {
   }, [apiSkus, skuSearch, skuDoraFilter]);
 
   if (loading) {
-    return (
-      <Card>
-        <p>Loading client…</p>
-      </Card>
-    );
+    return <Loader label="Loading client…" />;
   }
 
   if (!client) {

@@ -4,6 +4,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { ClientAvatar } from '../components/ui/ClientAvatar';
+import { Loader } from '../components/ui/Loader';
 import { SubscriptionTierPills } from '../components/ui/SubscriptionTierPills';
 import { useFollowUp } from '../hooks/useFollowUp';
 import { useModal } from '../context/ModalContext';
@@ -53,11 +54,7 @@ export function ClientsPage() {
     (c.creditHealth.variant === 'ba' && c.creditHealth.label.toLowerCase().includes('pin'));
 
   if (loading && !clients.length) {
-    return (
-      <div className="pghead">
-        <div className="pgsub">Loading clients…</div>
-      </div>
-    );
+    return <Loader label="Loading clients…" />;
   }
 
   return (
