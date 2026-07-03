@@ -47,6 +47,9 @@ export const platformApi = {
   addNote: (id: string, text: string, warn?: boolean) =>
     apiClient.post(`/sartor/clients/${id}/notes`, { text, warn }).then((r) => unwrap(r)),
 
+  upgradeDomain: (id: string, body: { tier: 'growth' | 'enterprise'; verifyDomain?: string }) =>
+    apiClient.post(`/sartor/clients/${id}/domain-upgrade`, body).then((r) => unwrap(r)),
+
   createClientUser: (clientId: string, body: Record<string, unknown>) =>
     apiClient.post(`/sartor/clients/${clientId}/users`, body).then((r) => unwrap(r)),
 

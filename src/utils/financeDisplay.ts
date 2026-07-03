@@ -58,13 +58,15 @@ export function isCreditSaleInvoice(desc?: string): boolean {
   );
 }
 
+// Per-seat monthly revenue-seat rate. CRM 360 is a flat unlimited-seat bundle,
+// not billed per seat, so it returns 0 here.
 export function crmSeatRate(tier: string | null): number {
   if (!tier) return 0;
   const t = tier.toLowerCase();
-  if (t.includes('360')) return 25000;
-  if (t.includes('+') || t.includes('plus') || t.includes('nav+')) return 12000;
-  if (t.includes('nav')) return 5000;
-  return 5000;
+  if (t.includes('360')) return 0;
+  if (t.includes('depot') || t.includes('plus') || t.includes('nav+') || t.includes('+')) return 22000;
+  if (t.includes('field') || t.includes('nav')) return 15000;
+  return 15000;
 }
 
 export function parseSeatsFromDescription(desc?: string): number | null {

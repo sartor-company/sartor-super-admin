@@ -30,7 +30,24 @@ import {
   type PlatformInvoiceRow,
 } from '../utils/financeDisplay';
 import { formatNaira } from '../utils/format';
+import { BILL, type CrmTierType } from '../utils/pricing';
 import { crmPillLabel, crmPillVariant } from '../utils/clientDisplay';
+
+type CrmTierMeta = {
+  label: string;
+  minRev: number;
+  revRate: number;
+  hasOp: boolean;
+  opRate: number;
+  unlimited: boolean;
+  monthly: number;
+};
+
+const CRM_TIER_META: Record<CrmTierType, CrmTierMeta> = {
+  field: { label: 'CRM Field', minRev: 3, revRate: BILL.crmField, hasOp: false, opRate: 0, unlimited: false, monthly: 0 },
+  depot: { label: 'CRM Depot', minRev: 5, revRate: BILL.crmDepotRev, hasOp: true, opRate: BILL.crmDepotOp, unlimited: false, monthly: 0 },
+  '360': { label: 'CRM 360', minRev: 0, revRate: 0, hasOp: false, opRate: 0, unlimited: true, monthly: Math.round(BILL.crm360Annual / 12) },
+};
 import {
   donutFromBreakdown,
   revenueSeriesFromCharts,
@@ -75,8 +92,9 @@ export function FinancePage() {
   const [invType, setInvType] = useState('All revenue types');
   const [detailInvoice, setDetailInvoice] = useState<PlatformInvoiceRow | null>(null);
   const [crmClientId, setCrmClientId] = useState('');
-  const [crmTierRate, setCrmTierRate] = useState('');
+  const [crmTier, setCrmTier] = useState<CrmTierType | ''>('');
   const [crmSeats, setCrmSeats] = useState('');
+  const [crmOpSeats, setCrmOpSeats] = useState('');
   const [crmCycle, setCrmCycle] = useState('monthly');
   const [saving, setSaving] = useState(false);
 
@@ -175,17 +193,35 @@ export function FinancePage() {
     [invoiceRows],
   );
 
+  const crmCompute = useMemo(() => {
+    if (!crmTier) return null;
+    const meta = CRM_TIER_META[crmTier];
+    if (crmTier === '360') {
+      return { monthly: meta.monthly, rev: 0, op: 0, minRev: 0, unlimited: true };
+    }
+    const rev = Number(crmSeats) || 0;
+    const op = meta.hasOp ? Number(crmOpSeats) || 0 : 0;
+    const monthly = rev * meta.revRate + op * meta.opRate;
+    return { monthly, rev, op, minRev: meta.minRev, unlimited: false };
+  }, [crmTier, crmSeats, crmOpSeats]);
+
   const crmPreview = useMemo(() => {
-    const rate = Number(crmTierRate);
-    const seats = Number(crmSeats);
-    if (!rate || !seats) return '';
-    const monthly = rate * seats;
+    if (!crmCompute || !crmTier) return '';
+    const { monthly, rev, op, minRev, unlimited } = crmCompute;
+    const meta = CRM_TIER_META[crmTier];
+    if (!unlimited && rev < minRev) {
+      return `${meta.label} requires a minimum of ${minRev} revenue seats.`;
+    }
+    if (!monthly) return '';
     const yearlyList = monthly * 12;
-    const total = crmCycle === 'annual' ? Math.round(yearlyList * 0.8) : monthly;
+    const annualDue = Math.round(yearlyList * 0.8);
+    const breakdown = unlimited
+      ? `${meta.label} — unlimited seats · flat ${formatNaira(monthly)}/mo`
+      : `${rev} revenue${op ? ` + ${op} operational` : ''} seats = ${formatNaira(monthly)}/mo`;
     return crmCycle === 'annual'
-      ? `Annual: ${formatNaira(yearlyList)} list − 20% (${formatNaira(yearlyList - total)}) = ${formatNaira(total)}`
-      : `Monthly: ${seats} × ${formatNaira(rate)} = ${formatNaira(monthly)}/month`;
-  }, [crmTierRate, crmSeats, crmCycle]);
+      ? `${breakdown} · Annual: ${formatNaira(yearlyList)} list − 20% = ${formatNaira(annualDue)}/yr`
+      : `Monthly: ${breakdown}`;
+  }, [crmCompute, crmTier, crmCycle]);
 
   const markPaid = async (inv: PlatformInvoiceRow) => {
     try {
@@ -203,28 +239,36 @@ export function FinancePage() {
       showToast('Select a client.', 'error');
       return;
     }
-    const tierMap: Record<string, string> = {
-      '5000': 'Sales Navigator',
-      '12000': 'Sales Navigator Plus',
-      '25000': 'CRM 360',
-    };
-    const tier = tierMap[crmTierRate] || 'CRM';
-    const seats = Number(crmSeats) || 0;
+    if (!crmTier || !crmCompute) {
+      showToast('Select a CRM tier.', 'error');
+      return;
+    }
+    const meta = CRM_TIER_META[crmTier];
+    const { monthly, rev, op, unlimited } = crmCompute;
+    if (!unlimited && rev < meta.minRev) {
+      showToast(`${meta.label} requires at least ${meta.minRev} revenue seats.`, 'error');
+      return;
+    }
     setSaving(true);
     try {
       await platformApi.patchClient(client._id, {
         crmEnabled: true,
-        crmTier: tier,
+        crmTierType: crmTier,
+        crmTier: meta.label,
+        crmSeats: unlimited ? 0 : rev,
+        crmOpSeats: op,
+        crmBillingCycle: crmCycle === 'annual' ? 'annual' : 'monthly',
       });
-      if (createInvoice && seats > 0) {
-        const rate = Number(crmTierRate);
-        const amount =
-          crmCycle === 'annual' ? Math.round(rate * seats * 12 * 0.8) : rate * seats;
+      if (createInvoice) {
+        const amount = crmCycle === 'annual' ? Math.round(monthly * 12 * 0.8) : monthly;
+        const seatLabel = unlimited
+          ? 'unlimited seats'
+          : `${rev} revenue${op ? ` + ${op} operational` : ''} seats`;
         await platformApi.createInvoice({
           adminId: client._id,
           clientName: client.name,
           clientCode: client.code,
-          description: `CRM subscription — ${tier} (${seats} seats)`,
+          description: `CRM subscription — ${meta.label} (${seatLabel}, ${crmCycle})`,
           amount,
         });
       }
@@ -697,27 +741,35 @@ export function FinancePage() {
             <FormGroup label="CRM Tier *">
               <select
                 className="inp"
-                value={crmTierRate}
-                onChange={(e) => setCrmTierRate(e.target.value)}
+                value={crmTier}
+                onChange={(e) => setCrmTier(e.target.value as CrmTierType | '')}
               >
                 <option value="">Select tier...</option>
-                <option value="5000">Sales Navigator — ₦5,000/seat/month</option>
-                <option value="12000">Sales Navigator Plus — ₦12,000/seat/month</option>
-                <option value="25000">CRM 360 — ₦25,000/seat/month</option>
+                <option value="field">CRM Field — ₦{BILL.crmField.toLocaleString()}/seat/mo · min 3 seats</option>
+                <option value="depot">CRM Depot — revenue + operational seats · min 5 seats</option>
+                <option value="360">CRM 360 — unlimited seats · flat bundle</option>
               </select>
             </FormGroup>
           </div>
           <div className="fr2">
-            <FormGroup label="Number of Seats *">
-              <input
-                type="number"
-                className="inp"
-                placeholder="e.g. 10"
-                min={1}
-                value={crmSeats}
-                onChange={(e) => setCrmSeats(e.target.value)}
-              />
-            </FormGroup>
+            {crmTier === '360' ? (
+              <FormGroup label="Seats">
+                <input className="inp" value="Unlimited" readOnly />
+              </FormGroup>
+            ) : (
+              <FormGroup
+                label={`Revenue Seats * (min ${crmTier ? CRM_TIER_META[crmTier].minRev : 3})`}
+              >
+                <input
+                  type="number"
+                  className="inp"
+                  placeholder={crmTier === 'depot' ? 'e.g. 5' : 'e.g. 3'}
+                  min={crmTier ? CRM_TIER_META[crmTier].minRev : 3}
+                  value={crmSeats}
+                  onChange={(e) => setCrmSeats(e.target.value)}
+                />
+              </FormGroup>
+            )}
             <FormGroup label="Billing Cycle">
               <select className="inp" value={crmCycle} onChange={(e) => setCrmCycle(e.target.value)}>
                 <option value="monthly">Monthly</option>
@@ -725,6 +777,20 @@ export function FinancePage() {
               </select>
             </FormGroup>
           </div>
+          {crmTier === 'depot' && (
+            <div className="fr2">
+              <FormGroup label={`Operational Seats (₦${BILL.crmDepotOp.toLocaleString()}/seat/mo)`}>
+                <input
+                  type="number"
+                  className="inp"
+                  placeholder="e.g. 2"
+                  min={0}
+                  value={crmOpSeats}
+                  onChange={(e) => setCrmOpSeats(e.target.value)}
+                />
+              </FormGroup>
+            </div>
+          )}
           {crmPreview && (
             <div style={{ padding: '10px 13px', background: 'var(--gb)', borderRadius: 7, fontSize: 13, color: 'var(--gt)', marginBottom: 13 }}>
               {crmPreview}

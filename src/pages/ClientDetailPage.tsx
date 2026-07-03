@@ -677,56 +677,91 @@ export function ClientDetailPage() {
               All clients start on the Sartor default domain. Domain upgrades are optional commercial add-ons. Each tier
               is independent of SKU volume pricing.
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
-              <div style={{ border: '2px solid var(--green)', borderRadius: 9, padding: 13, background: 'var(--gb)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <strong style={{ color: 'var(--gt)' }}>Starter</strong>
-                  <Badge variant="bg">Active</Badge>
-                </div>
-                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: 'var(--gt)', marginBottom: 4 }}>
-                  verify.dorascan.ai/{client.code.toLowerCase()}/{'{order_token}'}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--gt)', marginBottom: 4 }}>
-                  Sartor default domain · Included for all clients at no charge
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--gt)', fontWeight: 600 }}>₦0 — Included</div>
-              </div>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 9, padding: 13 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <strong>Growth Subdomain</strong>
-                  <Badge variant="bx">Not Active</Badge>
-                </div>
-                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-                  verify-{client.code.toLowerCase()}.dorascan.ai
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>
-                  Sartor-managed subdomain · DevOps provisioned · Wildcard SSL included
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--navy)', marginBottom: 8 }}>
-                  ₦100,000 setup + ₦50,000/yr maintenance
-                </div>
-                <Button className="bacc" size="sm" onClick={() => openModal('domain-upgrade')}>
-                  Upgrade to Growth
-                </Button>
-              </div>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 9, padding: 13 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <strong>Enterprise CNAME</strong>
-                  <Badge variant="bx">Not Active</Badge>
-                </div>
-                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-                  verify.{client.code.toLowerCase()}.com
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>
-                  Client&apos;s own domain · CNAME to Sartor · Individual SSL per client
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--navy)', marginBottom: 8 }}>
-                  ₦150,000 setup + ₦200,000/yr maintenance
-                </div>
-                <Button variant="primary" size="sm" onClick={() => openModal('domain-upgrade')}>
-                  Upgrade to Enterprise
-                </Button>
-              </div>
+            <div className="domain-tier-grid">
+              {(() => {
+                const activeTier = (client.domainTier || 'starter').toLowerCase();
+                const starterActive = activeTier === 'starter';
+                const growthActive = activeTier === 'growth';
+                const entActive = activeTier === 'enterprise';
+                return (
+                  <>
+                    <div
+                      style={{
+                        border: starterActive ? '2px solid var(--green)' : '1px solid var(--border)',
+                        borderRadius: 9,
+                        padding: 13,
+                        background: starterActive ? 'var(--gb)' : undefined,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <strong style={{ color: starterActive ? 'var(--gt)' : undefined }}>Starter</strong>
+                        <Badge variant={starterActive ? 'bg' : 'bx'}>{starterActive ? 'Active' : 'Available'}</Badge>
+                      </div>
+                      <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: 'var(--gt)', marginBottom: 4, wordBreak: 'break-all' }}>
+                        verify.dorascan.ai/{client.code.toLowerCase()}/{'{order_token}'}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--gt)', marginBottom: 4 }}>
+                        Sartor default domain · Included for all clients at no charge
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--gt)', fontWeight: 600 }}>₦0 — Included</div>
+                    </div>
+                    <div
+                      style={{
+                        border: growthActive ? '2px solid var(--green)' : '1px solid var(--border)',
+                        borderRadius: 9,
+                        padding: 13,
+                        background: growthActive ? 'var(--gb)' : undefined,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <strong>Growth Subdomain</strong>
+                        <Badge variant={growthActive ? 'bg' : 'bx'}>{growthActive ? 'Active' : 'Not Active'}</Badge>
+                      </div>
+                      <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: 'var(--text3)', marginBottom: 4, wordBreak: 'break-all' }}>
+                        verify-{client.code.toLowerCase()}.dorascan.ai
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>
+                        Sartor-managed subdomain · DevOps provisioned · Wildcard SSL included
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--navy)', marginBottom: 8 }}>
+                        ₦100,000 setup + ₦50,000/yr maintenance
+                      </div>
+                      {!growthActive && (
+                        <Button className="bacc" size="sm" onClick={() => openModal('domain-upgrade')}>
+                          Upgrade to Growth
+                        </Button>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        border: entActive ? '2px solid var(--green)' : '1px solid var(--border)',
+                        borderRadius: 9,
+                        padding: 13,
+                        background: entActive ? 'var(--gb)' : undefined,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <strong>Enterprise CNAME</strong>
+                        <Badge variant={entActive ? 'bg' : 'bx'}>{entActive ? 'Active' : 'Not Active'}</Badge>
+                      </div>
+                      <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: 'var(--text3)', marginBottom: 4, wordBreak: 'break-all' }}>
+                        verify.{client.code.toLowerCase()}.com
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>
+                        Client&apos;s own domain · CNAME to Sartor · Individual SSL per client
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--navy)', marginBottom: 8 }}>
+                        ₦150,000 setup + ₦200,000/yr maintenance
+                      </div>
+                      {!entActive && (
+                        <Button variant="primary" size="sm" onClick={() => openModal('domain-upgrade')}>
+                          Upgrade to Enterprise
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
             <div
               style={{

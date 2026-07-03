@@ -1,9 +1,6 @@
-import { useState } from 'react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal, ModalFooter } from '../components/ui/Modal';
-import { platformApi } from '../api/platform';
-import { useToast } from '../context/ToastContext';
 import { useInvoiceBranding } from '../hooks/useInvoiceBranding';
 import {
   formatInvoiceAmount,
@@ -24,8 +21,6 @@ export function InvoiceDetailModal({
   onClose: () => void;
 }) {
   const branding = useInvoiceBranding();
-  const { showToast } = useToast();
-  const [paying, setPaying] = useState(false);
 
   if (!invoice) return null;
 
@@ -35,28 +30,6 @@ export function InvoiceDetailModal({
 
   const rates = branding.exchangeRates;
   const banks = (branding.bankAccounts || []).filter((b) => b.status !== 'Inactive');
-  const isPaid = invoice.status === 'Paid';
-
-  const payWithPaystack = async () => {
-    setPaying(true);
-    try {
-      const res = (await platformApi.payInvoice(invoice.invoiceId)) as {
-        authorization_url?: string;
-        manual?: boolean;
-      };
-      if (res?.authorization_url) {
-        window.open(res.authorization_url, '_blank', 'noopener');
-      } else if (res?.manual) {
-        showToast('Paystack not configured — mark this invoice paid manually.', 'warn');
-      } else {
-        showToast('Could not start payment.', 'error');
-      }
-    } catch {
-      showToast('Could not start payment.', 'error');
-    } finally {
-      setPaying(false);
-    }
-  };
 
   return (
     <Modal
@@ -171,11 +144,6 @@ export function InvoiceDetailModal({
         >
           Download PDF
         </Button>
-        {!isPaid ? (
-          <Button className="bacc" disabled={paying} onClick={payWithPaystack}>
-            {paying ? 'Starting…' : 'Pay with Paystack'}
-          </Button>
-        ) : null}
         <Button variant="secondary" onClick={onClose}>
           Close
         </Button>

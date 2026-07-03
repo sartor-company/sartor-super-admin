@@ -163,9 +163,13 @@ export function OverviewPage() {
           <KCard label="Open Investigations" value={String(cards.openInvestigations ?? '—')} trend="Open" trendType="dn" />
         </div>
         <KCard
-          label="MRR"
-          value={cards.mrr ? `₦${Number(cards.mrr).toLocaleString()}` : '—'}
-          trend="Paid invoices"
+          label="ARR"
+          value={cards.arr ? `₦${Number(cards.arr).toLocaleString()}` : '—'}
+          trend={
+            Number(cards.mrr) > 0
+              ? `MRR ₦${Number(cards.mrr).toLocaleString()}`
+              : 'Annual recurring'
+          }
           trendType="up"
         />
       </div>

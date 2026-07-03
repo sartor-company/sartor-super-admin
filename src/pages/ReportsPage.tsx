@@ -456,9 +456,9 @@ export function ReportsPage() {
               trendType="neu"
             />
             <KCard
-              label="Nav+ / Nav Clients"
+              label="Field / Depot Clients"
               value={String(filteredCrm.filter((c) => c.crm && !c.crm.includes('360')).length)}
-              trend="Sales Navigator"
+              trend="CRM Field / Depot"
               trendType="neu"
             />
           </KCardGrid>

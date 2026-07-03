@@ -317,8 +317,6 @@ export function calcOnboardingTotal(opts: {
 
 export function calcCrmBilling(rate: number, seats: number, annual: boolean) {
   const tierNames: Record<number, string> = {
-    5000: 'Sales Navigator',
-    12000: 'Sales Navigator Plus',
     15000: 'CRM Field',
     22000: 'CRM Depot',
     25000: 'CRM 360',

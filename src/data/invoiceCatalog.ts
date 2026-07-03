@@ -56,11 +56,12 @@ export const INVOICE_CATALOG: InvoiceCatalogGroup[] = [
     ],
   },
   {
-    label: 'Sartor CRM — per seat per month',
+    label: 'Sartor CRM — seat & subscription rates',
     options: [
-      { value: 5000, label: 'Sales Navigator — ₦5,000/seat/month' },
-      { value: 12000, label: 'Sales Navigator Plus — ₦12,000/seat/month' },
-      { value: 25000, label: 'CRM 360 — ₦25,000/seat/month' },
+      { value: 15000, label: 'CRM Field — ₦15,000/seat/month (min 3)' },
+      { value: 22000, label: 'CRM Depot (revenue) — ₦22,000/seat/month (min 5)' },
+      { value: 8000, label: 'CRM Depot (operational) — ₦8,000/seat/month' },
+      { value: 375000, label: 'CRM 360 — ₦375,000/month (flat, unlimited seats)' },
     ],
   },
   {

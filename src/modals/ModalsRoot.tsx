@@ -28,10 +28,29 @@ import { TicketDetailModal } from './TicketDetailModal';
 import { TicketModal } from './TicketModal';
 
 const CRM_TIERS = [
-  'Sales Navigator',
-  'Sales Navigator Plus',
-  'CRM 360',
+  { key: 'field', name: 'CRM Field', price: '₦15,000/seat/mo', desc: 'Revenue seats · min 3 seats' },
+  { key: 'depot', name: 'CRM Depot', price: '₦22,000 rev + ₦8,000 op', desc: 'Revenue + operational seats · min 5 seats' },
+  { key: '360', name: 'CRM 360', price: 'Flat bundle · unlimited', desc: 'Full SC + DORA + unlimited CRM seats' },
 ] as const;
+
+const CRM_SEAT_RATE: Record<string, number> = { field: 15000, depot: 22000, '360': 0 };
+
+const DOMAIN_PLANS = {
+  growth: {
+    label: 'Growth Subdomain',
+    setup: 100000,
+    yr: 50000,
+    host: (code: string) => `verify-${code}.dorascan.ai`,
+  },
+  enterprise: {
+    label: 'Enterprise CNAME',
+    setup: 150000,
+    yr: 200000,
+    host: (code: string) => `verify.${code}.com`,
+  },
+} as const;
+
+type DomainTierKey = keyof typeof DOMAIN_PLANS;
 
 export function ModalsRoot() {
   const { isOpen, closeModal } = useModal();
@@ -63,6 +82,7 @@ export function ModalsRoot() {
   const [seats, setSeats] = useState(12);
   const [seatReason, setSeatReason] = useState('');
   const [domainTarget, setDomainTarget] = useState('');
+  const [domainTier, setDomainTier] = useState<DomainTierKey>('growth');
   const [escalateReason, setEscalateReason] = useState('');
   const [resubmitReason, setResubmitReason] = useState('');
   const [resubmitGuidance, setResubmitGuidance] = useState('');
@@ -85,16 +105,16 @@ export function ModalsRoot() {
     if (editOpen && selectedClient) setEditName(selectedClient.name);
   }, [editOpen, selectedClient]);
   useEffect(() => {
-    if (seatOpen && selectedClient) setSeats(selectedClient.crmSeats || 12);
+    if (seatOpen && selectedClient) setSeats(selectedClient.crmSeats || 3);
   }, [seatOpen, selectedClient]);
   useEffect(() => {
     if (convertOpen) setConvSkus('10');
   }, [convertOpen]);
   useEffect(() => {
     if (domainOpen && selectedClient) {
-      setDomainTarget(`verify-${selectedClient.code.toLowerCase()}.sartor.ng`);
+      setDomainTarget(DOMAIN_PLANS[domainTier].host(selectedClient.code.toLowerCase()));
     }
-  }, [domainOpen, selectedClient]);
+  }, [domainOpen, selectedClient, domainTier]);
   useEffect(() => {
     if (!assignOpen) {
       setAssignStaffId('');
@@ -125,12 +145,18 @@ export function ModalsRoot() {
     }
   }, [uploadOpen]);
 
+  const seatTier = selectedClient?.crmTierType || 'field';
+  const seatRate = CRM_SEAT_RATE[seatTier] ?? 15000;
+  const seatMin = seatTier === 'depot' ? 5 : 3;
   const seatPreview = () => {
-    const monthly = seats * 25000;
-    const diff = seats - 12;
+    if (seatTier === '360') {
+      return 'CRM 360 is a flat unlimited-seat bundle — seat count does not affect billing.';
+    }
+    const monthly = seats * seatRate;
+    const diff = seats - seatMin;
     const diffTxt =
-      diff === 0 ? '(no change)' : diff > 0 ? `(+${diff} seats added)` : `(${Math.abs(diff)} seats removed)`;
-    return `New monthly total: ${formatNaira(monthly)} — ₦25,000/seat/month ${diffTxt}`;
+      diff === 0 ? `(at minimum ${seatMin})` : diff > 0 ? `(+${diff} above min ${seatMin})` : `(below min ${seatMin})`;
+    return `New monthly total: ${formatNaira(monthly)} — ${formatNaira(seatRate)}/seat/month ${diffTxt}`;
   };
 
   const convPrev = calcConversionPreview(parseInt(convSkus, 10) || 0);
@@ -202,10 +228,20 @@ export function ModalsRoot() {
             marginBottom: 14,
           }}
         >
-          Current: <strong>{selectedClient?.crmSeats || 12} active seats</strong> · ₦25,000/seat/month · All CRM tiers billed per seat per month.
+          Current: <strong>{selectedClient?.crmSeats ?? 0} revenue seats</strong> ·{' '}
+          {seatTier === '360'
+            ? 'CRM 360 — flat unlimited bundle'
+            : `${formatNaira(seatRate)}/seat/month · min ${seatMin} seats`}
         </div>
         <FormGroup label="New Seat Count *">
-          <input type="number" className="inp" value={seats} min={1} onChange={(e) => setSeats(parseInt(e.target.value, 10) || 0)} />
+          <input
+            type="number"
+            className="inp"
+            value={seats}
+            min={seatMin}
+            disabled={seatTier === '360'}
+            onChange={(e) => setSeats(parseInt(e.target.value, 10) || 0)}
+          />
         </FormGroup>
         <div style={{ padding: 9, background: 'var(--gb)', borderRadius: 7, fontSize: 12, color: 'var(--gt)', marginBottom: 14 }}>
           {seatPreview()}
@@ -261,11 +297,7 @@ export function ModalsRoot() {
       <Modal open={tierOpen} onClose={() => closeModal('crm-tier')} title="Change CRM Tier" width={560}>
         <InfoBanner>ℹ Tier change takes effect next billing cycle unless specified.</InfoBanner>
         <div className="crm-tier-grid" style={{ marginBottom: 14 }}>
-          {[
-            { name: 'Sales Navigator', price: '₦5,000', desc: 'Basic sales management' },
-            { name: 'Sales Navigator Plus', price: '₦12,000', desc: 'Advanced reporting & routing' },
-            { name: 'CRM 360', price: '₦25,000', desc: 'Full SC + DORA integration' },
-          ].map((tier, i) => (
+          {CRM_TIERS.map((tier, i) => (
             <div
               key={tier.name}
               className={`crm-tier ${crmTierSel === i ? 'sel' : ''}`}
@@ -275,7 +307,7 @@ export function ModalsRoot() {
               onKeyDown={(e) => e.key === 'Enter' && setCrmTierSel(i)}
             >
               <div className="ct-name">{tier.name}</div>
-              <div className="ct-price">{tier.price}/seat/month</div>
+              <div className="ct-price">{tier.price}</div>
               <div className="ct-desc">{tier.desc}</div>
             </div>
           ))}
@@ -292,12 +324,13 @@ export function ModalsRoot() {
               setLifecycleSaving(true);
               try {
                 await platformApi.patchClient(selectedClient._id, {
-                  crmTier: CRM_TIERS[crmTierSel],
+                  crmTierType: CRM_TIERS[crmTierSel].key,
+                  crmTier: CRM_TIERS[crmTierSel].name,
                   crmEnabled: true,
                 });
                 await platformApi.addNote(
                   selectedClient._id,
-                  `CRM tier changed to ${CRM_TIERS[crmTierSel]}.`,
+                  `CRM tier changed to ${CRM_TIERS[crmTierSel].name}.`,
                 );
                 await refresh();
                 notifyClientReload();
@@ -361,15 +394,43 @@ export function ModalsRoot() {
       </Modal>
 
       <Modal open={domainOpen} onClose={() => closeModal('domain-upgrade')} title="Domain Upgrade">
-        <WarnBanner>⚠ Requires engineering provisioning.</WarnBanner>
+        <WarnBanner>⚠ Requires engineering provisioning. An invoice is raised on upgrade.</WarnBanner>
+        <FormGroup label="Domain Plan">
+          <select
+            className="inp"
+            value={domainTier}
+            onChange={(e) => setDomainTier(e.target.value as DomainTierKey)}
+          >
+            <option value="growth">Growth Subdomain</option>
+            <option value="enterprise">Enterprise CNAME</option>
+          </select>
+        </FormGroup>
         <FormGroup label="Target Domain">
           <input
             className="inp"
-            placeholder="e.g. verify-shc.sartor.ng"
+            placeholder="e.g. verify-shc.dorascan.ai"
             value={domainTarget}
             onChange={(e) => setDomainTarget(e.target.value)}
           />
         </FormGroup>
+        <div
+          style={{
+            padding: 10,
+            background: 'var(--gb)',
+            borderRadius: 7,
+            fontSize: 12,
+            color: 'var(--gt)',
+            marginBottom: 14,
+          }}
+        >
+          Invoice on upgrade: <strong>{formatNaira(DOMAIN_PLANS[domainTier].setup)}</strong> one-time setup +{' '}
+          <strong>{formatNaira(DOMAIN_PLANS[domainTier].yr)}</strong> annual maintenance
+          <div style={{ marginTop: 3, color: 'var(--text2)' }}>
+            First-year total{' '}
+            <strong>{formatNaira(DOMAIN_PLANS[domainTier].setup + DOMAIN_PLANS[domainTier].yr)}</strong>. Annual
+            maintenance recurs yearly (counts toward ARR).
+          </div>
+        </div>
         <ModalFooter>
           <Button variant="secondary" onClick={() => closeModal('domain-upgrade')} disabled={lifecycleSaving}>
             Cancel
@@ -381,26 +442,25 @@ export function ModalsRoot() {
               if (!selectedClient?._id) return;
               setLifecycleSaving(true);
               try {
-                await platformApi.patchClient(selectedClient._id, {
+                await platformApi.upgradeDomain(selectedClient._id, {
+                  tier: domainTier,
                   verifyDomain: domainTarget.trim(),
-                  domainTier: 'growth',
                 });
-                await platformApi.addNote(
-                  selectedClient._id,
-                  `Domain upgrade requested: ${domainTarget.trim()}`,
-                );
                 await refresh();
                 notifyClientReload();
                 closeModal('domain-upgrade');
-                showToast('Domain upgrade request submitted.', 'success');
+                showToast(
+                  `Upgraded to ${DOMAIN_PLANS[domainTier].label}. Invoice raised.`,
+                  'success',
+                );
               } catch (e) {
-                showToast(e instanceof Error ? e.message : 'Could not submit request.', 'error');
+                showToast(e instanceof Error ? e.message : 'Could not upgrade domain.', 'error');
               } finally {
                 setLifecycleSaving(false);
               }
             }}
           >
-            {lifecycleSaving ? 'Submitting…' : 'Submit Request'}
+            {lifecycleSaving ? 'Upgrading…' : 'Upgrade & Invoice'}
           </Button>
         </ModalFooter>
       </Modal>

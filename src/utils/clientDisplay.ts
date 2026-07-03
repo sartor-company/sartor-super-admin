@@ -108,10 +108,8 @@ export function crmPillLabel(crm: string | null): string | null {
   if (!crm) return null;
   const c = crm.toLowerCase();
   if (c.includes('360')) return 'CRM 360';
-  if (c.includes('depot')) return 'CRM Depot';
-  if (c.includes('field')) return 'CRM Field';
-  if (c.includes('+') || c.includes('plus')) return 'Sales Nav+';
-  if (c.includes('navigator') || c.includes('nav')) return 'Sales Nav';
+  if (c.includes('depot') || c.includes('+') || c.includes('plus')) return 'CRM Depot';
+  if (c.includes('field') || c.includes('navigator') || c.includes('nav')) return 'CRM Field';
   return crm;
 }
 

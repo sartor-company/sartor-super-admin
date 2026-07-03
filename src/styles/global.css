@@ -97,6 +97,7 @@ tr.cl{cursor:pointer}
 .inp{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;color:var(--text);outline:none;background:#fff}
 .inp:focus{border-color:var(--accent)}.inp[readonly]{background:var(--bg);color:var(--text2)}
 .fg{margin-bottom:13px}.fr2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.domain-tier-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
 .tab-bar{display:flex;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto;gap:0}
 .tab{padding:8px 15px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;background:transparent;border-radius:0;outline:none;font-family:inherit;-webkit-appearance:none;appearance:none;box-shadow:none}
 .tab.on{color:var(--navy);border-bottom-color:var(--accent)}
@@ -211,6 +212,7 @@ button.crm-tier{font-size:inherit;line-height:1.35}
   .cnt{padding:14px;height:calc(100vh - 89px);overflow-x:clip}
   .kgrid,.kgrid3,.kgrid5{grid-template-columns:repeat(2,1fr)}
   .r2,.r3{grid-template-columns:1fr}.fr2,.fr3{grid-template-columns:1fr}
+  .domain-tier-grid{grid-template-columns:1fr}
   .pghead{flex-wrap:wrap;gap:8px}
   table{font-size:12px}th,td{padding:6px 8px}
   .table-responsive>table th,.table-responsive>table td{white-space:nowrap}
