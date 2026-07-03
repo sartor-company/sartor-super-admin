@@ -213,7 +213,9 @@ button.crm-tier{font-size:inherit;line-height:1.35}
   .kgrid,.kgrid3,.kgrid5{grid-template-columns:repeat(2,1fr)}
   .r2,.r3{grid-template-columns:1fr}.fr2,.fr3{grid-template-columns:1fr}
   .domain-tier-grid{grid-template-columns:1fr}
-  .pghead{flex-wrap:wrap;gap:8px}
+  .pghead{flex-direction:column;align-items:flex-start;gap:10px}
+  .pghead>*{max-width:100%;min-width:0}
+  .pghead .pgtitle{font-size:18px;line-height:1.25}
   table{font-size:12px}th,td{padding:6px 8px}
   .table-responsive>table th,.table-responsive>table td{white-space:nowrap}
   .table-responsive>table .btn,.table-responsive>table button{white-space:nowrap}
