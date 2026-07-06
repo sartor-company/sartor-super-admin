@@ -32,6 +32,13 @@ import {
 import { formatNaira } from '../utils/format';
 import { BILL, type CrmTierType } from '../utils/pricing';
 import { crmPillLabel, crmPillVariant } from '../utils/clientDisplay';
+import {
+  donutFromBreakdown,
+  revenueSeriesFromCharts,
+  revenueSeriesFromInvoices,
+} from '../utils/chartSeries';
+import { exportReport } from './shared';
+import { InvoiceDetailModal } from '../modals/InvoiceDetailModal';
 
 type CrmTierMeta = {
   label: string;
@@ -48,13 +55,8 @@ const CRM_TIER_META: Record<CrmTierType, CrmTierMeta> = {
   depot: { label: 'CRM Depot', minRev: 5, revRate: BILL.crmDepotRev, hasOp: true, opRate: BILL.crmDepotOp, unlimited: false, monthly: 0 },
   '360': { label: 'CRM 360', minRev: 0, revRate: 0, hasOp: false, opRate: 0, unlimited: true, monthly: Math.round(BILL.crm360Annual / 12) },
 };
-import {
-  donutFromBreakdown,
-  revenueSeriesFromCharts,
-  revenueSeriesFromInvoices,
-} from '../utils/chartSeries';
-import { exportReport } from './shared';
-import { InvoiceDetailModal } from '../modals/InvoiceDetailModal';
+
+const fmtSeat = (n: number) => `₦${n.toLocaleString()}/seat/mo`;
 
 type FinTab = 'dash' | 'invoices' | 'crm' | 'credits' | 'scdora';
 
@@ -219,7 +221,7 @@ export function FinancePage() {
       ? `${meta.label} — unlimited seats · flat ${formatNaira(monthly)}/mo`
       : `${rev} revenue${op ? ` + ${op} operational` : ''} seats = ${formatNaira(monthly)}/mo`;
     return crmCycle === 'annual'
-      ? `${breakdown} · Annual: ${formatNaira(yearlyList)} list − 20% = ${formatNaira(annualDue)}/yr`
+      ? `${breakdown} · Annual payment: ${formatNaira(yearlyList)} list − 20% discount on total = ${formatNaira(annualDue)}/yr`
       : `Monthly: ${breakdown}`;
   }, [crmCompute, crmTier, crmCycle]);
 
@@ -745,9 +747,15 @@ export function FinancePage() {
                 onChange={(e) => setCrmTier(e.target.value as CrmTierType | '')}
               >
                 <option value="">Select tier...</option>
-                <option value="field">CRM Field — ₦{BILL.crmField.toLocaleString()}/seat/mo · min 3 seats</option>
-                <option value="depot">CRM Depot — revenue + operational seats · min 5 seats</option>
-                <option value="360">CRM 360 — unlimited seats · flat bundle</option>
+                <option value="field">
+                  CRM Field — Revenue {fmtSeat(BILL.crmField)} · min 3
+                </option>
+                <option value="depot">
+                  CRM Depot — Revenue {fmtSeat(BILL.crmDepotRev)} · min 5 + Operational {fmtSeat(BILL.crmDepotOp)}
+                </option>
+                <option value="360">
+                  CRM 360 — unlimited seats · flat {fmtSeat(Math.round(BILL.crm360Annual / 12))} bundle
+                </option>
               </select>
             </FormGroup>
           </div>
@@ -758,7 +766,7 @@ export function FinancePage() {
               </FormGroup>
             ) : (
               <FormGroup
-                label={`Revenue Seats * (min ${crmTier ? CRM_TIER_META[crmTier].minRev : 3})`}
+                label={`Revenue — ${fmtSeat(crmTier ? CRM_TIER_META[crmTier].revRate : BILL.crmField)} · min ${crmTier ? CRM_TIER_META[crmTier].minRev : 3} *`}
               >
                 <input
                   type="number"
@@ -773,13 +781,13 @@ export function FinancePage() {
             <FormGroup label="Billing Cycle">
               <select className="inp" value={crmCycle} onChange={(e) => setCrmCycle(e.target.value)}>
                 <option value="monthly">Monthly</option>
-                <option value="annual">Annual (20% discount)</option>
+                <option value="annual">Annual — 20% discount on total</option>
               </select>
             </FormGroup>
           </div>
           {crmTier === 'depot' && (
             <div className="fr2">
-              <FormGroup label={`Operational Seats (₦${BILL.crmDepotOp.toLocaleString()}/seat/mo)`}>
+              <FormGroup label={`Operational — ${fmtSeat(BILL.crmDepotOp)}`}>
                 <input
                   type="number"
                   className="inp"
