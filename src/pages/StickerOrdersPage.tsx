@@ -40,7 +40,7 @@ export function StickerOrdersPage() {
   const { showToast } = useToast();
   const followUp = useFollowUp();
   const { can, role } = useRoleGates();
-  const { openTriggerPinTarget, openDispatchTarget } = useApp();
+  const { openTriggerPinTarget, openDispatchTarget, openDownloadPackageTarget } = useApp();
   const { stickerOrders, stickerSummary, loading, refreshStickerOrders } = usePlatform();
 
   const [search, setSearch] = useState('');
@@ -90,8 +90,8 @@ export function StickerOrdersPage() {
     try {
       await platformApi.patchStickerOrder(row._id, { action: 'downloadPackage' });
       await refreshStickerOrders();
+      openDownloadPackageTarget(toTarget(row));
       openModal('download-package');
-      showToast('Package marked as downloaded.', 'success');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Download failed.', 'error');
     } finally {

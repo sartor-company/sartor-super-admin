@@ -157,4 +157,24 @@ export const platformApi = {
 
   patchStickerOrder: (id: string, body: Record<string, unknown>) =>
     apiClient.patch(`/sartor/sticker-orders/${id}`, body).then((r) => unwrap(r)),
+
+  downloadStickerFile: async (id: string, fileId: string, format: string) => {
+    const { filenameFromDisposition, triggerBlobDownload, messageFromBlobError } = await import(
+      '../utils/downloadBlob'
+    );
+    try {
+      const res = await apiClient.get(`/sartor/sticker-orders/${id}/download/${fileId}`, {
+        params: { format },
+        responseType: 'blob',
+      });
+      const fallback = `${fileId}.${format.toLowerCase().replace(/\s+/g, '-')}`;
+      const filename = filenameFromDisposition(
+        res.headers['content-disposition'] as string | undefined,
+        fallback,
+      );
+      triggerBlobDownload(res.data as Blob, filename);
+    } catch (e) {
+      throw new Error(await messageFromBlobError(e));
+    }
+  },
 };

@@ -51,9 +51,16 @@ export function TriggerPinModal() {
       subtitle={`${row.orderId} · ${row.clientName} · ${row.qtyWithOverage.toLocaleString()} PINs (incl. 10% overage)`}
       width={480}
     >
-      <InfoBanner style={{ marginBottom: 14 }}>
-        ℹ PINs are generated as <strong>DORMANT</strong>. They activate only when the client completes a batch
-        activation from their admin console. Format: 10-digit alphanumeric.
+      <InfoBanner style={{ marginBottom: 14, lineHeight: 1.55 }}>
+        <div style={{ display: 'grid', gap: 6 }}>
+          <div>
+            ℹ PINs are generated as <strong>DORMANT</strong>.
+          </div>
+          <div>
+            They activate only when the client completes a batch activation from their admin console.
+          </div>
+          <div style={{ color: 'var(--text2)' }}>Format: 10-digit alphanumeric.</div>
+        </div>
       </InfoBanner>
       <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
         {[

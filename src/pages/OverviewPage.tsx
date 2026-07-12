@@ -18,7 +18,8 @@ export function OverviewPage() {
   const { openModal } = useModal();
   const followUp = useFollowUp();
   const { can } = useRoleGates();
-  const { overview, clients, charts, investigations, onboarding, doraQueue, loading } = usePlatform();
+  const { overview, clients, charts, investigations, onboarding, doraQueue, stickerOrders, loading } =
+    usePlatform();
   const scanSeries = useMemo(
     () =>
       charts?.scanVolume?.length
@@ -28,7 +29,7 @@ export function OverviewPage() {
   );
   const cards = (overview?.cards || {}) as Record<string, number | string>;
   const health = (overview?.health || {}) as Record<string, string | number>;
-  const overviewClients = (overview?.clients as typeof clients) || clients.slice(0, 6);
+  const overviewClients = ((overview?.clients as typeof clients) || clients).slice(0, 5);
 
   const healthRows = [
     { dot: 'var(--green)', label: 'API uptime (30d)', value: health.apiUptime || '—' },
@@ -116,6 +117,31 @@ export function OverviewPage() {
       });
     }
 
+    const pendingStickers = stickerOrders.filter(
+      (o) =>
+        !o.activatedAt &&
+        (o.stage === 'pin_gen' || o.pinStatus === 'pending' || o.pinStatus === 'generating'),
+    );
+    if (pendingStickers.length > 0) {
+      const first = pendingStickers[0];
+      items.push({
+        key: 'sticker-pin',
+        tone: 'attention',
+        title:
+          pendingStickers.length === 1
+            ? `Sticker order ${first.orderId} — PIN Gen`
+            : `${pendingStickers.length} Sticker Orders Need PIN Gen`,
+        badge: 'Attention',
+        badgeVariant: 'ba',
+        description:
+          pendingStickers.length === 1
+            ? `${first.clientName} · ${first.productName} · ${first.qtyWithOverage?.toLocaleString?.() ?? first.qtyWithOverage} PINs`
+            : `Oldest: ${first.orderId} · ${first.clientName}`,
+        buttonLabel: 'Sticker Orders',
+        onClick: () => navigate('/sticker-orders'),
+      });
+    }
+
     const blocked = onboarding.find(
       (o) => o.blocker && o.blocker !== 'None' && o.blocker !== 'Unassigned',
     );
@@ -132,8 +158,8 @@ export function OverviewPage() {
       });
     }
 
-    return items.slice(0, 4);
-  }, [investigations, doraQueue, clients, onboarding, navigate, followUp]);
+    return items.slice(0, 5);
+  }, [investigations, doraQueue, clients, onboarding, stickerOrders, navigate, followUp]);
 
   return (
     <>

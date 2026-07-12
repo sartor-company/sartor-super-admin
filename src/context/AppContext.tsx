@@ -72,6 +72,9 @@ interface AppContextValue {
   dispatchTarget: StickerOrderTarget | null;
   openDispatchTarget: (target: StickerOrderTarget) => void;
   clearDispatchTarget: () => void;
+  downloadPackageTarget: StickerOrderTarget | null;
+  openDownloadPackageTarget: (target: StickerOrderTarget) => void;
+  clearDownloadPackageTarget: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -104,6 +107,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [stickerDesignTarget, setStickerDesignTarget] = useState<StickerDesignTarget | null>(null);
   const [triggerPinTarget, setTriggerPinTarget] = useState<StickerOrderTarget | null>(null);
   const [dispatchTarget, setDispatchTarget] = useState<StickerOrderTarget | null>(null);
+  const [downloadPackageTarget, setDownloadPackageTarget] = useState<StickerOrderTarget | null>(null);
   const noteHandlerRef = useRef<((text: string) => void) | null>(null);
   const teamReloadRef = useRef<(() => void) | null>(null);
   const clientReloadRef = useRef<(() => void) | null>(null);
@@ -218,6 +222,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDispatchTarget(null);
   }, []);
 
+  const openDownloadPackageTarget = useCallback((target: StickerOrderTarget) => {
+    setDownloadPackageTarget(target);
+  }, []);
+
+  const clearDownloadPackageTarget = useCallback(() => {
+    setDownloadPackageTarget(null);
+  }, []);
+
   const value = useMemo(
     () => ({
       role,
@@ -270,6 +282,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatchTarget,
       openDispatchTarget,
       clearDispatchTarget,
+      downloadPackageTarget,
+      openDownloadPackageTarget,
+      clearDownloadPackageTarget,
     }),
     [
       role,
@@ -317,6 +332,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatchTarget,
       openDispatchTarget,
       clearDispatchTarget,
+      downloadPackageTarget,
+      openDownloadPackageTarget,
+      clearDownloadPackageTarget,
     ],
   );
 

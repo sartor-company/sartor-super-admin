@@ -28,6 +28,8 @@ export type StickerOrderRow = {
   trackingNumber: string;
   dispatchedAt?: number;
   deliveredAt?: number;
+  activatedAt?: number;
+  activatedBatchRef?: string;
   notes: string;
   canDownload: boolean;
   canDispatch: boolean;

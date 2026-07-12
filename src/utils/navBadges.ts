@@ -21,7 +21,10 @@ export function computeNavBadges(input: {
   if (attentionClients > 0) badges.attentionClients = attentionClients;
   if (input.onboarding.length > 0) badges.onboarding = input.onboarding.length;
   const stickerPending = input.stickerOrders.filter(
-    (o) => o.stage === 'pin_gen' || o.pinStatus !== 'complete',
+    (o) =>
+      o.stage === 'pin_gen' ||
+      o.pinStatus === 'pending' ||
+      o.pinStatus === 'generating',
   ).length;
   if (stickerPending > 0) badges.stickerOrders = stickerPending;
   if (input.doraQueue.length > 0) badges.doraQueue = input.doraQueue.length;
