@@ -8,9 +8,16 @@ export function NotifPanel() {
   const navigate = useNavigate();
   const { notifOpen, setNotifOpen, clearNotifDot } = useApp();
   const { showToast } = useToast();
-  const { notifications, loading } = usePlatform();
+  const { notifications, loading, markNotificationsRead } = usePlatform();
 
-  const openItem = (href?: string) => {
+  const openItem = async (href?: string, id?: string) => {
+    if (id && !id.startsWith('inv-') && !id.startsWith('pin-') && !id.startsWith('onb-')) {
+      try {
+        await markNotificationsRead(id);
+      } catch {
+        /* ignore */
+      }
+    }
     if (href) {
       navigate(href);
       setNotifOpen(false);
@@ -38,8 +45,8 @@ export function NotifPanel() {
               role={n.href ? 'button' : undefined}
               tabIndex={n.href ? 0 : undefined}
               style={n.href ? { cursor: 'pointer' } : undefined}
-              onClick={() => openItem(n.href)}
-              onKeyDown={(e) => e.key === 'Enter' && openItem(n.href)}
+              onClick={() => openItem(n.href, n.id)}
+              onKeyDown={(e) => e.key === 'Enter' && openItem(n.href, n.id)}
             >
               <div style={{ display: 'flex', gap: 9 }}>
                 <span className="ndotc" style={{ background: n.color }} />
@@ -52,6 +59,9 @@ export function NotifPanel() {
                     }}
                   >
                     {n.title}
+                    {n.read === false ? (
+                      <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--bt)' }}>NEW</span>
+                    ) : null}
                   </div>
                   <div style={{ color: 'var(--text2)' }}>{n.body}</div>
                   <div style={{ color: 'var(--text3)', marginTop: 3 }}>{n.time}</div>
@@ -66,7 +76,12 @@ export function NotifPanel() {
           variant="secondary"
           size="sm"
           style={{ width: '100%' }}
-          onClick={() => {
+          onClick={async () => {
+            try {
+              await markNotificationsRead();
+            } catch {
+              /* ignore */
+            }
             clearNotifDot();
             showToast('All notifications marked as read.', 'success');
             setNotifOpen(false);

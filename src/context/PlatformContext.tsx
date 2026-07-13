@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -14,6 +15,8 @@ import type { OnboardingRow } from '../data/onboarding';
 import type { StickerOrderRow, StickerOrderSummary } from '../data/stickerOrders';
 import type { PlatformNotification, PlatformSettings, PlatformStaff } from '../types';
 import type { PlatformCharts } from '../utils/chartSeries';
+import { useApp } from './AppContext';
+import { useToast } from './ToastContext';
 
 type PlatformState = {
   clients: Client[];
@@ -32,17 +35,23 @@ type PlatformState = {
   reports: Record<string, unknown> | null;
   charts: PlatformCharts | null;
   notifications: PlatformNotification[];
+  unreadNotifications: number;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   refreshClients: () => Promise<void>;
   refreshOnboarding: () => Promise<void>;
   refreshStickerOrders: () => Promise<void>;
+  refreshNotifications: () => Promise<void>;
+  markNotificationsRead: (id?: string) => Promise<void>;
 };
 
 const PlatformContext = createContext<PlatformState | null>(null);
 
 export function PlatformProvider({ children }: { children: ReactNode }) {
+  const { showToast } = useToast();
+  const { setNotifDot } = useApp();
+  const seenNotifIds = useRef<Set<string>>(new Set());
   const [clients, setClients] = useState<Client[]>([]);
   const [onboarding, setOnboarding] = useState<OnboardingRow[]>([]);
   const [stickerOrders, setStickerOrders] = useState<StickerOrderRow[]>([]);
@@ -59,6 +68,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
   const [reports, setReports] = useState<Record<string, unknown> | null>(null);
   const [charts, setCharts] = useState<PlatformCharts | null>(null);
   const [notifications, setNotifications] = useState<PlatformNotification[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,6 +87,32 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
     setStickerOrders(res.data || []);
     setStickerSummary(res.summary || null);
   }, []);
+
+  const refreshNotifications = useCallback(async () => {
+    const res = await platformApi.notifications();
+    const list = res.data || [];
+    const unread = res.unreadCount ?? list.filter((n) => n.read === false).length;
+    setNotifications(list);
+    setUnreadNotifications(unread);
+    setNotifDot(unread > 0);
+
+    const primed = seenNotifIds.current.size > 0;
+    for (const n of list) {
+      if (seenNotifIds.current.has(n.id)) continue;
+      seenNotifIds.current.add(n.id);
+      if (primed && (n.kind === 'success' || n.kind === 'error')) {
+        showToast(n.title, n.kind === 'error' ? 'error' : 'success');
+      }
+    }
+  }, [setNotifDot, showToast]);
+
+  const markNotificationsRead = useCallback(
+    async (id?: string) => {
+      await platformApi.markNotificationsRead(id ? { id } : {});
+      await refreshNotifications();
+    },
+    [refreshNotifications],
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -119,7 +155,16 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       setFinanceSummary(val(11, null));
       setReports(val(12, null));
       setCharts(val(13, null) as PlatformCharts | null);
-      setNotifications(val(14, { data: [] }).data || []);
+      const notifRes = val(14, {
+        data: [] as PlatformNotification[],
+        unreadCount: 0,
+      });
+      const list = notifRes.data || [];
+      setNotifications(list);
+      const unread = notifRes.unreadCount ?? list.filter((n) => n.read === false).length;
+      setUnreadNotifications(unread);
+      setNotifDot(unread > 0);
+      for (const n of list) seenNotifIds.current.add(n.id);
 
       if (results[0].status === 'rejected') {
         const reason = results[0].reason;
@@ -130,11 +175,26 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setNotifDot]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Poll jobs + notifications so users get alerts without waiting on the page
+  useEffect(() => {
+    const tick = async () => {
+      try {
+        await refreshNotifications();
+        const generating = stickerOrders.some((o) => o.pinStatus === 'generating');
+        if (generating) await refreshStickerOrders();
+      } catch {
+        /* ignore poll errors */
+      }
+    };
+    const id = window.setInterval(tick, 15000);
+    return () => window.clearInterval(id);
+  }, [refreshNotifications, refreshStickerOrders, stickerOrders]);
 
   const value = useMemo(
     () => ({
@@ -154,12 +214,15 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       reports,
       charts,
       notifications,
+      unreadNotifications,
       loading,
       error,
       refresh,
       refreshClients,
       refreshOnboarding,
       refreshStickerOrders,
+      refreshNotifications,
+      markNotificationsRead,
     }),
     [
       clients,
@@ -178,12 +241,15 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       reports,
       charts,
       notifications,
+      unreadNotifications,
       loading,
       error,
       refresh,
       refreshClients,
       refreshOnboarding,
       refreshStickerOrders,
+      refreshNotifications,
+      markNotificationsRead,
     ],
   );
 

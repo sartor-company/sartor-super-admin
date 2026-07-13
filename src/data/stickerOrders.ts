@@ -34,6 +34,11 @@ export type StickerOrderRow = {
   canDownload: boolean;
   canDispatch: boolean;
   canTriggerPin: boolean;
+  pinJob?: {
+    target?: number;
+    generated?: number;
+    error?: string;
+  };
   creationDateTime?: number;
 };
 

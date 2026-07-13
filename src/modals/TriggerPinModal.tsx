@@ -30,7 +30,7 @@ export function TriggerPinModal() {
       await platformApi.patchStickerOrder(row._id, { action: 'triggerPin' });
       await refreshStickerOrders();
       showToast(
-        `PIN generation triggered for ${row.orderId}. ${row.assignedPinName || 'AI/ML'} notified.`,
+        `PIN generation started for ${row.orderId}. We’ll notify you when it’s done — you can leave this page.`,
         'success',
       );
       close();
@@ -88,8 +88,8 @@ export function TriggerPinModal() {
         ))}
       </div>
       <WarnBanner>
-        ⚠ This action triggers the AI/ML endpoint. PIN generation typically completes within 2–5 minutes for
-        orders under 50,000 units.
+        ⚠ Large orders run in the background in chunks so the server stays healthy. You’ll get an in-app
+        notification (and alert) when generation finishes.
       </WarnBanner>
       <ModalFooter>
         <Button variant="secondary" onClick={close} disabled={saving}>

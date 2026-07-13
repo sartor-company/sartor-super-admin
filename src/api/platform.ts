@@ -23,7 +23,9 @@ export const platformApi = {
   overview: () => apiClient.get('/sartor/overview').then((r) => unwrap(r)),
 
   notifications: () =>
-    apiClient.get('/sartor/notifications').then((r) => unwrap<{ data: PlatformNotification[] }>(r)),
+    apiClient
+      .get('/sartor/notifications')
+      .then((r) => unwrap<{ data: PlatformNotification[]; unreadCount?: number }>(r)),
 
   dashboard: () => apiClient.get('/sartor/dashboard').then((r) => unwrap(r)),
 
@@ -158,23 +160,36 @@ export const platformApi = {
   patchStickerOrder: (id: string, body: Record<string, unknown>) =>
     apiClient.patch(`/sartor/sticker-orders/${id}`, body).then((r) => unwrap(r)),
 
-  downloadStickerFile: async (id: string, fileId: string, format: string) => {
-    const { filenameFromDisposition, triggerBlobDownload, messageFromBlobError } = await import(
-      '../utils/downloadBlob'
-    );
-    try {
-      const res = await apiClient.get(`/sartor/sticker-orders/${id}/download/${fileId}`, {
-        params: { format },
-        responseType: 'blob',
-      });
-      const fallback = `${fileId}.${format.toLowerCase().replace(/\s+/g, '-')}`;
-      const filename = filenameFromDisposition(
-        res.headers['content-disposition'] as string | undefined,
-        fallback,
-      );
-      triggerBlobDownload(res.data as Blob, filename);
-    } catch (e) {
-      throw new Error(await messageFromBlobError(e));
-    }
+  getStickerPackageData: async (
+    id: string,
+    params?: { page?: number; limit?: number },
+  ) => {
+    const res = await apiClient.get(`/sartor/sticker-orders/${id}/package-data`, { params });
+    return unwrap<{
+      order: {
+        orderId: string;
+        clientName?: string;
+        clientCode?: string;
+        productName?: string;
+        sku?: string;
+        qtyOrdered?: number;
+        qtyWithOverage?: number;
+        stage?: string;
+        pinStatus?: string;
+        qrStatus?: string;
+        linkStatus?: string;
+        pinsLinkedCount?: number;
+        batchRef?: string;
+      };
+      verifyUrl: string;
+      pins: Array<{ pin: string; status?: string; serialNumber?: string }>;
+      page: number;
+      pages: number;
+      total: number;
+      limit: number;
+    }>(res);
   },
+
+  markNotificationsRead: (body?: { id?: string }) =>
+    apiClient.post('/sartor/notifications/read', body || {}).then((r) => unwrap(r)),
 };

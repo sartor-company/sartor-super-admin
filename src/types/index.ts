@@ -151,6 +151,8 @@ export interface PlatformNotification {
   time: string;
   titleColor?: string;
   href?: string;
+  read?: boolean;
+  kind?: string;
 }
 
 export interface DoraLabelContext {

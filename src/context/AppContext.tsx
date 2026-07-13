@@ -37,6 +37,7 @@ interface AppContextValue {
   setNotifOpen: (open: boolean) => void;
   notifDot: boolean;
   clearNotifDot: () => void;
+  setNotifDot: (v: boolean) => void;
   staffEditId: string | null;
   onboardingAssignId: string | null;
   investigationAssignId: string | null;
@@ -247,6 +248,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setNotifOpen,
       notifDot,
       clearNotifDot,
+      setNotifDot,
       staffEditId,
       onboardingAssignId,
       investigationAssignId,
@@ -297,6 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notifOpen,
       notifDot,
       clearNotifDot,
+      setNotifDot,
       staffEditId,
       onboardingAssignId,
       investigationAssignId,

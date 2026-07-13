@@ -279,8 +279,20 @@ export function StickerOrdersPage() {
                     </td>
                     <td>
                       <div style={{ fontSize: 11 }}>
-                        <div style={{ color: row.pinStatus === 'complete' ? 'var(--gt)' : 'var(--at)' }}>
+                        <div
+                          style={{
+                            color:
+                              row.pinStatus === 'complete'
+                                ? 'var(--gt)'
+                                : row.pinStatus === 'generating'
+                                  ? 'var(--bt)'
+                                  : 'var(--at)',
+                          }}
+                        >
                           {row.pinStatus === 'complete' ? '✓' : '●'} {row.pinStatusLabel}
+                          {row.pinStatus === 'generating' && row.pinJob?.target
+                            ? ` (${(row.pinJob.generated || 0).toLocaleString()}/${row.pinJob.target.toLocaleString()})`
+                            : ''}
                         </div>
                         {row.assignedPinName ? (
                           <div style={{ color: 'var(--text3)', marginTop: 2 }}>

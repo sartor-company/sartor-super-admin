@@ -5,33 +5,38 @@ import { Modal, ModalFooter } from '../components/ui/Modal';
 import { useApp } from '../context/AppContext';
 import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
+import {
+  downloadPackageArtifact,
+  fetchAllPackageData,
+  type PackagePayload,
+} from '../utils/stickerPackageClient';
 
 const FILES: Array<{
   id: string;
   title: string;
   desc: string;
-  actions: Array<{ label: string; format: string }>;
+  actions: Array<{ label: string; kind: 'csv' | 'xlsx' | 'qr-pdf' | 'summary-pdf' }>;
 }> = [
   {
     id: 'pin-manifest',
     title: 'PIN Manifest',
-    desc: 'DORMANT PINs · order_token mapping · activation status',
+    desc: 'Generated in your browser from order PIN data',
     actions: [
-      { label: 'CSV', format: 'CSV' },
-      { label: 'XLSX', format: 'XLSX' },
+      { label: 'CSV', kind: 'csv' },
+      { label: 'Excel', kind: 'xlsx' },
     ],
   },
   {
     id: 'qr-codes',
     title: 'QR Code Files',
     desc: 'PDF stickers · scan verify link · enter PIN on the page',
-    actions: [{ label: 'PDF', format: 'PDF' }],
+    actions: [{ label: 'PDF', kind: 'qr-pdf' }],
   },
   {
     id: 'batch-summary',
     title: 'Batch Summary Report',
-    desc: 'Full order report · batch details · PIN activation instructions',
-    actions: [{ label: 'PDF', format: 'PDF' }],
+    desc: 'Order report · activation instructions',
+    actions: [{ label: 'PDF', kind: 'summary-pdf' }],
   },
 ];
 
@@ -40,6 +45,8 @@ export function DownloadPackageModal() {
   const { showToast } = useToast();
   const { downloadPackageTarget, clearDownloadPackageTarget } = useApp();
   const [busy, setBusy] = useState<string | null>(null);
+  const [progress, setProgress] = useState('');
+  const [payload, setPayload] = useState<PackagePayload | null>(null);
   const open = isOpen('download-package');
   const order = downloadPackageTarget;
 
@@ -47,22 +54,40 @@ export function DownloadPackageModal() {
     closeModal('download-package');
     clearDownloadPackageTarget();
     setBusy(null);
+    setProgress('');
+    setPayload(null);
   };
 
-  const download = async (fileId: string, format: string, title: string) => {
+  const ensurePayload = async () => {
+    if (payload) return payload;
+    if (!order?._id) throw new Error('No sticker order selected');
+    setProgress('Loading PIN data…');
+    const data = await fetchAllPackageData((page, limit) =>
+      platformApi.getStickerPackageData(order._id, { page, limit }),
+    );
+    setPayload(data);
+    return data;
+  };
+
+  const download = async (
+    key: string,
+    kind: 'csv' | 'xlsx' | 'qr-pdf' | 'summary-pdf' | 'zip',
+    title: string,
+  ) => {
     if (!order?._id) {
       showToast('No sticker order selected for download.', 'error');
       return;
     }
-    const key = `${fileId}:${format}`;
     setBusy(key);
     try {
-      await platformApi.downloadStickerFile(order._id, fileId, format);
-      showToast(`${title} (${format}) downloaded.`, 'success');
+      const data = await ensurePayload();
+      await downloadPackageArtifact(kind, data, setProgress);
+      showToast(`${title} ready.`, 'success');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Download failed.', 'error');
     } finally {
       setBusy(null);
+      setProgress('');
     }
   };
 
@@ -88,8 +113,12 @@ export function DownloadPackageModal() {
           marginBottom: 14,
         }}
       >
-        ✓ All files ready. Download individual files or the complete ZIP package for dispatch to print vendor.
+        Files are built in your browser from live PIN data (server stays light). Large orders may take a
+        minute — progress shows below.
       </div>
+      {progress && (
+        <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>{progress}</div>
+      )}
       {!order && (
         <div style={{ padding: 12, color: 'var(--rt)', fontSize: 13, marginBottom: 12 }}>
           No order selected. Close and click ⬇ Package on a sticker order row.
@@ -122,9 +151,9 @@ export function DownloadPackageModal() {
                   variant="secondary"
                   size="sm"
                   disabled={!order || busy !== null}
-                  onClick={() => download(file.id, a.format, file.title)}
+                  onClick={() => download(`${file.id}:${a.kind}`, a.kind, file.title)}
                 >
-                  {busy === `${file.id}:${a.format}` ? '…' : a.label}
+                  {busy === `${file.id}:${a.kind}` ? '…' : a.label}
                 </Button>
               ))}
             </div>
@@ -138,9 +167,9 @@ export function DownloadPackageModal() {
         <Button
           className="bacc"
           disabled={!order || busy !== null}
-          onClick={() => download('zip', 'ZIP', 'Complete package')}
+          onClick={() => download('zip:ZIP', 'zip', 'Complete package')}
         >
-          {busy === 'zip:ZIP' ? 'Downloading…' : '⬇ Download Complete ZIP'}
+          {busy === 'zip:ZIP' ? 'Building…' : '⬇ Download Complete ZIP'}
         </Button>
       </ModalFooter>
     </Modal>
