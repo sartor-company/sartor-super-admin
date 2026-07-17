@@ -4,6 +4,7 @@ import { platformApi } from '../api/platform';
 import { useAuthStore } from '../store/authStore';
 import { ROLES } from '../constants/roles';
 import type { RoleId } from '../types';
+import { appToast } from '../utils/appFeedback';
 
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
@@ -38,6 +39,7 @@ export function LoginPage() {
   useEffect(() => {
     if (sessionExpired) {
       useAuthStore.getState().logout();
+      appToast('Your session has expired. Please sign in again.', 'warn');
     }
   }, [sessionExpired]);
 
@@ -114,7 +116,7 @@ export function LoginPage() {
 
           {sessionExpired && (
             <div className="login-error">
-              Your session expired or is invalid for this server. Sign in again, then retry onboarding.
+              Your session has expired. Please sign in again to continue.
             </div>
           )}
 

@@ -2,11 +2,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
+import { registerToast, unregisterToast } from '../utils/appFeedback';
 
 type ToastType = 'success' | 'error' | 'warn';
 
@@ -31,6 +33,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       setToast((t) => (t ? { ...t, visible: false } : null));
     }, 3400);
   }, []);
+
+  useEffect(() => {
+    registerToast(showToast);
+    return () => unregisterToast(showToast);
+  }, [showToast]);
 
   const value = useMemo(() => ({ showToast }), [showToast]);
 

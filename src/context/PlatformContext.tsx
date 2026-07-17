@@ -15,8 +15,43 @@ import type { OnboardingRow } from '../data/onboarding';
 import type { StickerOrderRow, StickerOrderSummary } from '../data/stickerOrders';
 import type { PlatformNotification, PlatformSettings, PlatformStaff } from '../types';
 import type { PlatformCharts } from '../utils/chartSeries';
+import {
+  getLocalNotifications,
+  markLocalNotificationsRead,
+  subscribeLocalNotifications,
+  type LocalAppNotification,
+} from '../utils/appFeedback';
 import { useApp } from './AppContext';
 import { useToast } from './ToastContext';
+
+function formatRelativeTime(ts: number) {
+  const mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
+}
+
+function mapLocalNotif(n: LocalAppNotification): PlatformNotification {
+  return {
+    id: n.id,
+    color: n.kind === 'error' ? 'var(--rt)' : n.kind === 'warn' ? 'var(--at)' : 'var(--bt)',
+    title: n.title,
+    body: n.body,
+    time: formatRelativeTime(n.createdAt),
+    titleColor: n.kind === 'error' ? 'var(--rt)' : undefined,
+    href: n.href,
+    read: n.read,
+    kind: n.kind,
+  };
+}
+
+function mergeNotifications(server: PlatformNotification[]): PlatformNotification[] {
+  const local = getLocalNotifications().map(mapLocalNotif);
+  const ids = new Set(local.map((n) => n.id));
+  return [...local, ...server.filter((n) => !ids.has(n.id))];
+}
 
 type PlatformState = {
   clients: Client[];
@@ -90,8 +125,8 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
 
   const refreshNotifications = useCallback(async () => {
     const res = await platformApi.notifications();
-    const list = res.data || [];
-    const unread = res.unreadCount ?? list.filter((n) => n.read === false).length;
+    const list = mergeNotifications(res.data || []);
+    const unread = list.filter((n) => n.read === false).length;
     setNotifications(list);
     setUnreadNotifications(unread);
     setNotifDot(unread > 0);
@@ -108,11 +143,20 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
 
   const markNotificationsRead = useCallback(
     async (id?: string) => {
-      await platformApi.markNotificationsRead(id ? { id } : {});
+      if (id?.startsWith('session-') || id?.startsWith('local-')) {
+        markLocalNotificationsRead(id);
+      } else {
+        await platformApi.markNotificationsRead(id ? { id } : {});
+        if (!id) markLocalNotificationsRead();
+      }
       await refreshNotifications();
     },
     [refreshNotifications],
   );
+
+  useEffect(() => subscribeLocalNotifications(() => {
+    void refreshNotifications();
+  }), [refreshNotifications]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -159,9 +203,9 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
         data: [] as PlatformNotification[],
         unreadCount: 0,
       });
-      const list = notifRes.data || [];
+      const list = mergeNotifications(notifRes.data || []);
       setNotifications(list);
-      const unread = notifRes.unreadCount ?? list.filter((n) => n.read === false).length;
+      const unread = list.filter((n) => n.read === false).length;
       setUnreadNotifications(unread);
       setNotifDot(unread > 0);
       for (const n of list) seenNotifIds.current.add(n.id);
