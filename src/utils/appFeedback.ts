@@ -50,7 +50,9 @@ export function getLocalNotifications(): LocalAppNotification[] {
 
 export function subscribeLocalNotifications(cb: () => void) {
   listeners.add(cb);
-  return () => listeners.delete(cb);
+  return () => {
+    listeners.delete(cb);
+  };
 }
 
 export function pushLocalNotification(
