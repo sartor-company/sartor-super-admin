@@ -183,135 +183,103 @@ export async function buildBatchSummaryPdf(payload: PackagePayload) {
   return doc.output('arraybuffer');
 }
 
+/** @deprecated Kept for callers; QR package is always a single shared sheet now. */
 export const QR_PDF_PART_SIZE = 200;
 
+/**
+ * Single shared QR sheet for an order.
+ * One QR encodes the order verify URL; unique PINs live in the pin manifest.
+ */
 export async function buildQrCodesPdf(
   payload: PackagePayload,
   onProgress?: (done: number, total: number) => void,
-  opts?: { partIndex?: number; partCount?: number },
 ) {
   const { order, verifyUrl, pins } = payload;
+  const pinCount = pins.length || Number(order.qtyWithOverage) || Number(order.qtyOrdered) || 0;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const perPage = 2;
-  const margin = 28;
+  const margin = 36;
   const headerH = 56;
-  const gap = 14;
-  const cardH = (pageH - margin - headerH - 24 - gap) / perPage;
-  const partIndex = opts?.partIndex;
-  const partCount = opts?.partCount;
 
   const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
-    width: 280,
+    width: 420,
     margin: 1,
     color: { dark: '#0B1F3A', light: '#FFFFFF' },
   });
 
-  const drawChrome = (pageIndex: number, pageCount: number) => {
-    doc.setFillColor(11, 31, 58);
-    doc.rect(0, 0, pageW, headerH, 'F');
-    doc.setFillColor(14, 165, 164);
-    doc.rect(0, headerH, pageW, 3, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('Security Sticker QR Sheet', margin, 28);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    const partLabel =
-      partIndex && partCount && partCount > 1 ? ` · Part ${partIndex}/${partCount}` : '';
-    doc.text(
-      `${order.orderId} · ${order.productName || ''} · ${order.clientCode || ''}${partLabel}`,
-      margin,
-      44,
-    );
-    doc.text(`Page ${pageIndex}/${pageCount}`, pageW - margin, 34, { align: 'right' });
-  };
+  doc.setFillColor(11, 31, 58);
+  doc.rect(0, 0, pageW, headerH, 'F');
+  doc.setFillColor(14, 165, 164);
+  doc.rect(0, headerH, pageW, 3, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('Security Sticker QR Sheet', margin, 28);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text(
+    `${order.orderId} · ${order.productName || ''} · ${order.clientCode || ''}`,
+    margin,
+    44,
+  );
 
-  const list = pins.length ? pins : [{ pin: 'PENDING', status: 'pending' }];
-  const pageCount = Math.max(1, Math.ceil(list.length / perPage));
+  const cardY = headerH + 28;
+  const cardH = pageH - cardY - 48;
+  const cardW = pageW - margin * 2;
+  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(margin, cardY, cardW, cardH, 10, 10, 'FD');
+  doc.setFillColor(14, 165, 164);
+  doc.rect(margin, cardY, 5, cardH, 'F');
 
-  for (let index = 0; index < list.length; index++) {
-    const slot = index % perPage;
-    const pageIndex = Math.floor(index / perPage) + 1;
-    if (index > 0 && slot === 0) doc.addPage();
-    if (slot === 0) drawChrome(pageIndex, pageCount);
+  let ty = cardY + 36;
+  doc.setTextColor(14, 165, 164);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('SHARED ORDER QR', pageW / 2, ty, { align: 'center' });
+  ty += 22;
+  doc.setTextColor(11, 31, 58);
+  doc.setFontSize(16);
+  doc.text('One QR for this sticker order', pageW / 2, ty, { align: 'center' });
+  ty += 28;
 
-    const y0 = margin + headerH + 10 + slot * (cardH + gap);
-    const pin = list[index].pin || '—';
-    doc.setDrawColor(226, 232, 240);
-    doc.setFillColor(255, 255, 255);
-    doc.roundedRect(margin, y0, pageW - margin * 2, cardH, 8, 8, 'FD');
-    doc.setFillColor(14, 165, 164);
-    doc.rect(margin, y0, 5, cardH, 'F');
+  const qrSize = 220;
+  const qrX = (pageW - qrSize) / 2;
+  doc.addImage(qrDataUrl, 'PNG', qrX, ty, qrSize, qrSize);
+  ty += qrSize + 28;
 
-    const qrSize = Math.min(140, cardH - 40);
-    doc.addImage(qrDataUrl, 'PNG', margin + 24, y0 + (cardH - qrSize) / 2, qrSize, qrSize);
+  doc.setFontSize(11);
+  doc.text('1. Scan this QR  ·  2. Enter the printed PIN on the verify page', pageW / 2, ty, {
+    align: 'center',
+  });
+  ty += 20;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text(verifyUrl, pageW / 2, ty, { align: 'center', maxWidth: cardW - 48 });
+  ty += 24;
+  doc.text(
+    `Covers ${pinCount.toLocaleString()} stickers. Unique PINs are in the pin manifest — do not print a separate QR per PIN.`,
+    pageW / 2,
+    ty,
+    { align: 'center', maxWidth: cardW - 64 },
+  );
 
-    const tx = margin + 24 + qrSize + 20;
-    doc.setTextColor(14, 165, 164);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('AUTHENTICITY CHECK', tx, y0 + 28);
-    doc.setTextColor(11, 31, 58);
-    doc.setFontSize(13);
-    doc.text('Verify this product', tx, y0 + 46);
-    doc.setFontSize(9);
-    doc.text('1. Scan the QR code', tx, y0 + 68);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(100, 116, 139);
-    doc.text(verifyUrl, tx, y0 + 82, { maxWidth: pageW - tx - 40 });
-    doc.setTextColor(11, 31, 58);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text('2. Enter this PIN on the page', tx, y0 + 104);
-    doc.setFillColor(11, 31, 58);
-    doc.roundedRect(tx, y0 + 112, 180, 32, 6, 6, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.text(pin, tx + 90, y0 + 133, { align: 'center' });
-    doc.setTextColor(100, 116, 139);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text('Type the PIN exactly as shown after scanning.', tx, y0 + 160, {
-      maxWidth: pageW - tx - 40,
-    });
-
-    if (onProgress && (index % 10 === 0 || index === list.length - 1)) {
-      onProgress(index + 1, list.length);
-      await new Promise((r) => setTimeout(r, 0));
-    }
-  }
-
+  onProgress?.(1, 1);
   return doc.output('arraybuffer');
 }
 
+/** Always returns a single shared QR PDF (no per-PIN sheets). */
 export async function buildQrCodesPdfParts(
   payload: PackagePayload,
   onProgress?: (done: number, total: number, partIndex: number, partCount: number) => void,
-  partSize = QR_PDF_PART_SIZE,
 ) {
-  const list = payload.pins.length ? payload.pins : [{ pin: 'PENDING', status: 'pending' }];
-  const partCount = Math.max(1, Math.ceil(list.length / partSize));
-  const parts: ArrayBuffer[] = [];
-
-  for (let p = 0; p < partCount; p++) {
-    const start = p * partSize;
-    const slice = list.slice(start, start + partSize);
-    const partIndex = p + 1;
-    const buf = await buildQrCodesPdf(
-      { ...payload, pins: slice },
-      (done) => onProgress?.(start + done, list.length, partIndex, partCount),
-      { partIndex, partCount },
-    );
-    parts.push(buf);
-      await new Promise((r) => setTimeout(r, 0));
-    }
-
-    return parts;
-  }
+  const buf = await buildQrCodesPdf(payload, (done, total) =>
+    onProgress?.(done, total, 1, 1),
+  );
+  return [buf];
+}
 
 export async function fetchAllPackageData(
   fetchPage: (page: number, limit: number) => Promise<{
@@ -361,25 +329,11 @@ export async function downloadPackageArtifact(
     return;
   }
   if (kind === 'qr-pdf') {
-    onProgress?.('Building QR PDF(s)…');
-    const parts = await buildQrCodesPdfParts(payload, (done, total, partIndex, partCount) =>
-      onProgress?.(
-        partCount > 1
-          ? `QR part ${partIndex}/${partCount} — ${done.toLocaleString()} / ${total.toLocaleString()} stickers`
-          : `QR stickers ${done.toLocaleString()} / ${total.toLocaleString()}`,
-      ),
+    onProgress?.('Building shared QR sheet…');
+    const buf = await buildQrCodesPdf(payload, () =>
+      onProgress?.('Shared QR sheet ready'),
     );
-    if (parts.length === 1) {
-      downloadBytes(`${id}-qr-codes.pdf`, parts[0], 'application/pdf');
-      return;
-    }
-    const zip = new JSZip();
-    parts.forEach((buf, i) => {
-      zip.file(`${id}-qr-codes-part-${i + 1}-of-${parts.length}.pdf`, buf);
-    });
-    onProgress?.('Packaging QR PDF parts…');
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-    triggerBlobDownload(blob, `${id}-qr-codes.zip`);
+    downloadBytes(`${id}-qr-codes.pdf`, buf, 'application/pdf');
     return;
   }
 
@@ -389,20 +343,9 @@ export async function downloadPackageArtifact(
   zip.file(`${id}-pin-manifest.xls`, buildPinManifestExcelXml(payload));
   const summary = await buildBatchSummaryPdf(payload);
   zip.file(`${id}-batch-summary.pdf`, summary);
-  const parts = await buildQrCodesPdfParts(payload, (done, total, partIndex, partCount) =>
-    onProgress?.(
-      partCount > 1
-        ? `QR part ${partIndex}/${partCount} — ${done.toLocaleString()} / ${total.toLocaleString()} stickers`
-        : `QR stickers ${done.toLocaleString()} / ${total.toLocaleString()}`,
-    ),
-  );
-  if (parts.length === 1) {
-    zip.file(`${id}-qr-codes.pdf`, parts[0]);
-  } else {
-    parts.forEach((buf, i) => {
-      zip.file(`${id}-qr-codes-part-${i + 1}-of-${parts.length}.pdf`, buf);
-    });
-  }
+  onProgress?.('Building shared QR sheet…');
+  const qrBuf = await buildQrCodesPdf(payload);
+  zip.file(`${id}-qr-codes.pdf`, qrBuf);
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
   triggerBlobDownload(blob, `${id}.zip`);
 }
